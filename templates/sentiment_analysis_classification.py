@@ -125,11 +125,14 @@ def train(dataset, metadata_path, w2v):
         while dataset.train.epochs_completed < FLAGS.num_epochs:
             train_batch = dataset.train.next_batch(batch_size=FLAGS.batch_size,
                                    pad=model.args["sequence_length"], one_hot=True)
+            
             accuracy, loss, step =  model.train_step(sess,
                                                  train_batch.text,
                                                  train_batch.ratings,
                                                  dataset.train.epochs_completed)
 
+            print(model.embedded_text_shape)
+            print(model.lstm_shape)
 
             if step % FLAGS.evaluate_every == 0:
                 avg_val_loss, avg_val_accuracy, _ = evaluate(sess=sess,
@@ -207,12 +210,95 @@ def evaluate(sess, dataset, model, step, max_dev_itr=100, verbose=True,
     return avg_loss, avg_accuracy, result_set
 
 
+def get_features(sess, dataset, model, step, max_dev_itr=100, verbose=True,
+             mode='val'):
+
+    results_dir = model.val_results_dir if mode == 'val'\
+                                        else model.test_results_dir
+    results_dir = results_dir + '/' + 'FEAT'
+    print '--DIR--',results_dir
+
+    samples_path = os.path.join(results_dir,
+                                '{}_samples_{}.txt'.format(mode, step))
+    history_path = os.path.join(results_dir,
+                                '{}_history.txt'.format(mode))
+
+    avg_val_loss, sum_accuracy = 0.0, 0.0
+    print("Running Evaluation {}:".format(mode))
+    tflearn.is_training(False, session=sess)
+
+    # This is needed to reset the local variables initialized by
+    sess.run(tf.local_variables_initializer())
+    all_dev_sentence, all_dev_score, all_dev_gt = [], [], []
+    dev_itr = 0
+    
+    while (dev_itr < max_dev_itr and max_dev_itr != 0) \
+                                    or mode in ['test', 'train']:
+        print '--------------------'
+        val_batch = dataset.next_batch(FLAGS.batch_size, one_hot=True,
+                                       pad=model.args["sequence_length"])
+        print len(val_batch)
+        val_loss, val_accuracy, val_correct_preds, val_ratings = \
+            model.evaluate_step(sess, val_batch.text, val_batch.ratings)
+        avg_val_loss += val_loss
+        sum_accuracy += np.sum(val_correct_preds)
+        all_dev_sentence += id2seq(val_batch.text, dataset.vocab_i2w)
+        all_dev_score += val_ratings.tolist()
+        all_dev_gt += val_batch.ratings.tolist()
+        dev_itr += 1
+
+        if mode == 'test' and dataset.epochs_completed == 1: break
+        if mode == 'train' and dataset.epochs_completed == 1: break
+
+    result_set = (all_dev_sentence, all_dev_score, all_dev_gt)
+    avg_loss = avg_val_loss / dev_itr
+    avg_accuracy = sum_accuracy / (dev_itr * FLAGS.batch_size)
+    if verbose:
+        print("{}:\t Loss: {}\tAccuracy: {}".format(mode, avg_loss,
+                                                    avg_accuracy))
+
+    with open(samples_path, 'w') as sf, open(history_path, 'a') as hf:
+        for sentence, score, gt in zip(all_dev_sentence,
+                                   all_dev_score, all_dev_gt):
+            sf.write('{}\t{}\t{}\n'.format(sentence, score, gt))
+        hf.write('STEP:{}\tTIME:{}\tACCURACY:{}\n'.format(
+            step, datetime.datetime.now().isoformat(),
+            avg_accuracy, avg_loss))
+    tflearn.is_training(True, session=sess)
+    return avg_loss, avg_accuracy, result_set
+
+
 def test(dataset, metadata_path, w2v, rescale=None):
     print("Configuring Tensorflow Graph")
     with tf.Graph().as_default():
         sess, model = initialize_tf_graph(metadata_path, w2v)
         dataset.test.open()
         avg_test_loss, avg_test_accuracy, test_result_set = evaluate(sess=sess,
+                                                        dataset=dataset.test,
+                                                        model=model,
+                                                        max_dev_itr=0,
+                                                        mode='test', step=-1)
+        print('Average Accuracy: {}\nAverage Loss: {}'.format(
+                                                avg_test_accuracy, avg_test_loss))
+        dataset.test.close()
+        _, predicted_ratings, gt = test_result_set
+        if rescale is not None:
+            gt = datasets.rescale(gt, new_range=rescale,
+                                  original_range=[0.0, 1.0])
+
+        figure_path = os.path.join(model.exp_dir, 'test_no_regression_sim.jpg')
+        plt.ylabel('Ground Truth Similarities')
+        plt.xlabel('Predicted  Similarities')
+        plt.scatter(predicted_ratings, gt, label="Similarity", s=0.2)
+        plt.savefig(figure_path)
+        print("saved similarity plot at {}".format(figure_path))
+
+def visualize(dataset, metadata_path, w2v, rescale=None):
+    print("Configuring Tensorflow Graph")
+    with tf.Graph().as_default():
+        sess, model = initialize_tf_graph(metadata_path, w2v)
+        dataset.test.open()
+        avg_test_loss, avg_test_accuracy, test_result_set = get_features(sess=sess,
                                                         dataset=dataset.test,
                                                         model=model,
                                                         max_dev_itr=0,
