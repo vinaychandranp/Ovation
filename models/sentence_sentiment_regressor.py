@@ -22,8 +22,6 @@ class SentenceSentimentRegressor(Model):
                       self.args.get("sequence_length")], name="input_review_words")
         self.sentiment = tf.placeholder(tf.float32, [None],
                                             name="input_sentiment")
-        self.sentiment = tf.placeholder(tf.float32, [None, self.args['max_sentences'], self.args["sequence_length"]],
-                                        name="input_review_sentences")
 
     def create_scalar_summary(self, sess):
         # Summaries for loss and accuracy
@@ -137,3 +135,15 @@ class SentenceSentimentRegressor(Model):
             print("EVAL: {}\tstep: {}\tloss: {:g}\t pco:{}\tmse: {}".format(time_str,
                                                         step, loss, pco, mse))
         return loss, pco, mse, sentiment
+
+    def infer(self, sess, text):
+        """
+        A single evaluation step
+        """
+        feed_dict = {
+            self.input: text
+        }
+        ops = [self.out]
+        sentiment = sess.run(ops, feed_dict)
+
+        return sentiment
