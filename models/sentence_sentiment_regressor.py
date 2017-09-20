@@ -49,11 +49,11 @@ class SentenceSentimentRegressor(Model):
 
     def build_model(self, metadata_path=None, embedding_weights=None):
 
-
-        self.embedding_weights, self.config = ops.embedding_layer(
-                                        metadata_path, embedding_weights)
-        self.embedded_text = tf.nn.embedding_lookup(self.embedding_weights,
-                                                    self.input)
+        with tf.name_scope("embedding"):
+            self.embedding_weights, self.config = ops.embedding_layer(
+                                            metadata_path, embedding_weights)
+            self.embedded_text = tf.nn.embedding_lookup(self.embedding_weights,
+                                                        self.input)
 
         with tf.name_scope("CNN_LSTM"):
             self.cnn_out = ops.multi_filter_conv_block(self.embedded_text,

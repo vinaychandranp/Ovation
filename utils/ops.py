@@ -49,14 +49,14 @@ def lstm_block(input, hidden_units=128, dropout=0.5, reuse=False, layers=1,
             if n_layer < layers - 1:
                 output = tflearn.lstm(prev_output, hidden_units, dropout=dropout,
                                 dynamic=dynamic, reuse=reuse,
-                                scope='{}_lstm_{}'.format(name, n_layer), return_seq=True)
+                                scope='lstm_{}'.format(n_layer), return_seq=True)
                 output = tf.stack(output, axis=0)
                 output = tf.transpose(output, perm=[1, 0, 2])
                 prev_output = output
                 continue
             output = tflearn.lstm(prev_output, hidden_units, dropout=dropout,
                                   dynamic=dynamic, reuse=reuse,
-                                  scope='{}_lstm_{}'.format(name, n_layer),
+                                  scope='lstm_{}'.format(n_layer),
                                   return_seq=return_seq)
         else:
             if n_layer < layers - 1:
@@ -66,7 +66,7 @@ def lstm_block(input, hidden_units=128, dropout=0.5, reuse=False, layers=1,
                                            BasicLSTMCell(hidden_units,
                                                          reuse=reuse),
                                            dynamic=dynamic,
-                                           scope='{}_blstm_{}'.format(name, n_layer),
+                                           scope='blstm_{}'.format(n_layer),
                                            return_seq=True)
                 output = tf.stack(output, axis=0)
                 output = tf.transpose(output, perm=[1, 0, 2])
@@ -78,7 +78,7 @@ def lstm_block(input, hidden_units=128, dropout=0.5, reuse=False, layers=1,
                                        BasicLSTMCell(hidden_units,
                                                      reuse=reuse),
                                        dynamic=dynamic,
-                                       scope='{}_blstm_{}'.format(name, n_layer),
+                                       scope='blstm_{}'.format(n_layer),
                                        return_seq=return_seq)
     return output
 

@@ -103,23 +103,25 @@ def get_sentiment(input_str):
     sentiment = spr_model.infer(sess, text)
     return sentiment
 
+
 def process_post_request(request):
     # TODO: add sanity checks for the request before moving on
     content = request.get_json()
     text = content['input']
     print('input text: '.format(text))
     response = {}
-    sentiment = get_sentiment(text)
+    sentiment = get_sentiment(text)[0]
     response['score'] = sentiment
     response['reason'] = 'some reason'
     return response
+
 
 def start_server(port):
     app = Flask(__name__)
     @app.route('/generateSentiment/en', methods=['POST'])
     def sentiment():
         response = process_post_request(request)
-        r = Response(response=json.dumps(response, ensure_ascii=False),
+        r = Response(response=json.dumps(response),
                      status=200, mimetype="application/json",
                      content_type='utf-8')
         r.headers["Content-Type"] = "text/plain; charset=utf-8"

@@ -307,10 +307,10 @@ if __name__ == '__main__':
     ds = None
     if FLAGS.dataset == 'amazon_de':
         print('Using the Amazon Reviews DE dataset')
-        ds = AmazonReviewsGerman()
+        ds = AmazonReviewsGerman(data_balancing=True)
     elif FLAGS.dataset == 'hotel_reviews':
         print('Using the Amazon Reviews DE dataset')
-        ds = HotelReviews()
+        ds = HotelReviews(data_balancing=True)
     else:
         raise NotImplementedError('Dataset {} has not been '
                                   'implemented yet'.format(FLAGS.dataset))
