@@ -36,7 +36,7 @@ tf.flags.DEFINE_integer("rnn_layers", 2, "Number of layers in the RNN")
 tf.flags.DEFINE_string("optimizer", 'adam', "Which Optimizer to use. "
                     "Available options are: adam, gradient_descent, adagrad, "
                     "adadelta, rmsprop")
-tf.flags.DEFINE_integer("learning_rate", 0.0001, "Learning Rate")
+tf.flags.DEFINE_floats("learning_rate", 0.0001, "Learning Rate")
 tf.flags.DEFINE_boolean("bidirectional", True, "Flag to have Bidirectional "
                                                "LSTMs")
 tf.flags.DEFINE_integer("sequence_length", 100, "maximum length of a sequence")
