@@ -67,7 +67,7 @@ def plot_confusion_matrix(cm, classes,fname,
     This function prints and plots the confusion matrix.
     Normalization can be applied by setting `normalize=True`.
     """
-    print(cm)
+
     if normalize:
 
         cm = cm.astype('float')
@@ -75,28 +75,13 @@ def plot_confusion_matrix(cm, classes,fname,
             cm[j,:]/=np.sum(cm[j,:])
         cm=cm*V
         print("Normalized confusion matrix")
-    else:
-        print('Confusion matrix, without normalization')
-
-    print(cm)
-
-    for j in range(cm.shape[0]):
-        print(np.sum(cm[j, :]))
+        print(cm)
 
 
 
-    '''
-    cmm = []
-    for j in cm:
-        d = sum(j)
-        if d > 0:
-            cmm.append([float("{0:.2f}".format(x / float(d))) for x in j])
-        else:
-            cmm.append(j)
+    #for j in range(cm.shape[0]):
+    #    print(np.sum(cm[j, :]))
 
-    thresh = cm.max() / 2.
-    cm = np.array(cmm)
-    '''
 
     plt.imshow(cm, interpolation='nearest', cmap=cmap)
     plt.title(title)
@@ -168,7 +153,7 @@ def compute_measure_classification(fname, ext='pdf'):
     precision, recall, fbeta, support = precision_recall_fscore_support(y_target, y_pred, average=None,labels=labels)
 
     print('Precision, Recall, F1')
-    print(';'.join(labels))
+    print(';'.join(map(str,labels)))
     print(np.array([precision,recall,fbeta]))
     compute_confusion_matrix(y_target, y_pred, plot_fname,plot=True)
 
