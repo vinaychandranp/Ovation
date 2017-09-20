@@ -107,7 +107,11 @@ class DataSetBalanced(object):
                 self.close()
                 self.datafile = open(self.path_list[self.epochs_completed % len(self.path_list)])
                 continue
-            json_obj = json.loads(row.strip())
+            try:
+                json_obj = json.loads(row.strip())
+            except:
+                print('Skipped row!')
+                continue
             text.append(datasets.tokenize(json_obj["review_text"], tokenizer))
             lengths.append(len(text[-1]))
             sentences.append(datasets.sentence_tokenizer(json_obj["review_text"]))
