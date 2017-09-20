@@ -139,6 +139,28 @@ def read_txt_file_classification(fname):
 
     return dataset
 
+def read_txt_file_regression(fname):
+    dataset = []
+    tot = 0
+    with open(fname,'r') as f_res:
+        lines = f_res.read().splitlines()
+        for line in lines:
+            text, pred, target = line.split('\t')
+            tot+=1
+            y_p = float(pred)
+            y_t = float(target)
+
+
+            class_predicted = int(np.floor(y_p + 0.5))
+            class_target = int(y_t)
+            #print(y_p, y_t, class_predicted, class_target)
+            dataset.append((text, y_p, y_t, class_predicted, class_target))
+
+        print('TOT LINES', tot)
+
+    return dataset
+
+
 def compute_measure_classification(fname, ext='pdf'):
     print('READ DATA', fname)
     a, b = os.path.split(fname)
@@ -158,4 +180,23 @@ def compute_measure_classification(fname, ext='pdf'):
     compute_confusion_matrix(y_target, y_pred, plot_fname,plot=True)
 
 
-compute_measure_classification('/home/scstech/WORK/ovation_proj/Ovation/test_samples_2363.txt')
+def compute_measure_regression(fname, ext='pdf'):
+    print('READ DATA', fname)
+    a, b = os.path.split(fname)
+    plot_fname = os.path.join(a,b.split('.')[0]+'_plot.'+ext)
+    dataset = read_txt_file_regression(fname)
+    _, _, _, y_pred, y_target = zip(*dataset)
+
+    print('Evaluation Metrics')
+
+    print('ACCURACY', accuracy_score(y_pred, y_target))
+    labels = range(max(y_target)+1)
+    precision, recall, fbeta, support = precision_recall_fscore_support(y_target, y_pred, average=None,labels=labels)
+
+    print('Precision, Recall, F1')
+    print(';'.join(map(str,labels)))
+    print(np.array([precision,recall,fbeta]))
+    compute_confusion_matrix(y_target, y_pred, plot_fname,plot=True)
+
+
+#compute_measure_classification('/home/scstech/WORK/ovation_proj/Ovation/test_samples_2363.txt')
