@@ -14,13 +14,11 @@ from datasets import AmazonReviewsGerman
 from datasets import HotelReviews
 from datasets import id2seq
 from pyqt_fit import npr_methods
-from models import HeirarchicalAttentionSentimentClassifier
+from models import SentimentRegressorSentence
 
 # Model Parameters
 tf.flags.DEFINE_integer("embedding_dim", 300, "Dimensionality of character "
                                             "embedding (default: 300)")
-tf.flags.DEFINE_integer("sentiment_size", 128, "sentiment size")
-tf.flags.DEFINE_integer("num_hops", 5, "num of hops")
 tf.flags.DEFINE_boolean("train_embeddings", True, "True if you want to train "
                                                   "the embeddings False "
                                                   "otherwise")
@@ -30,6 +28,7 @@ tf.flags.DEFINE_float("l2_reg_beta", 0.0, "L2 regularizaion lambda ("
                                             "default: 0.0)")
 tf.flags.DEFINE_integer("hidden_units", 128, "Number of hidden units of the "
                                              "RNN Cell")
+tf.flags.DEFINE_integer("max_sentences", 15, "Max Sentences. Default 15")
 tf.flags.DEFINE_integer("n_filters", 500, "Number of filters ")
 tf.flags.DEFINE_integer("rnn_layers", 2, "Number of layers in the RNN")
 tf.flags.DEFINE_string("optimizer", 'adam', "Which Optimizer to use. "
@@ -63,7 +62,7 @@ tf.flags.DEFINE_float("gpu_fraction", 0.5, "Fraction of GPU to use")
 tf.flags.DEFINE_string("data_dir", "/scratch", "path to the root of the data "
                                            "directory")
 tf.flags.DEFINE_string("experiment_name",
-                       "AMAZON_SENTIMENT_CNN_LSTM_REGRESSION",
+                       "SENTIMENT_CNN_LSTM_SENTS_REGRESSION",
                        "Name of your model")
 tf.flags.DEFINE_string("mode", "train", "'train' or 'test or results'")
 tf.flags.DEFINE_string("dataset", "amazon_de", "'The sentiment analysis "
@@ -84,7 +83,7 @@ def initialize_tf_graph(metadata_path, w2v):
     print("Session Started")
 
     with sess.as_default():
-        spr_model = HeirarchicalAttentionSentimentClassifier(FLAGS.__flags)
+        spr_model = SentimentRegressorSentence(FLAGS.__flags)
         spr_model.show_train_params()
         spr_model.build_model(metadata_path=metadata_path,
                                   embedding_weights=w2v)
@@ -114,10 +113,10 @@ def train(dataset, metadata_path, w2v):
         tflearn.is_training(True, session=sess)
         while dataset.train.epochs_completed < FLAGS.num_epochs:
             train_batch = dataset.train.next_batch(batch_size=FLAGS.batch_size,
-                               rescale=[0.0, 1.0], pad=spr_model.args["sequence_length"])
+                       sentence_pad=15, rescale=[0.0, 1.0], pad=spr_model.args["sequence_length"])
             pco, mse, loss, step = spr_model.train_step(sess,
                                                  train_batch.text,
-                                                 train_batch.ratings, train_batch.lengths,
+                                                 train_batch.ratings, train_batch.sentences,
                                                  dataset.train.epochs_completed)
 
             if step % FLAGS.evaluate_every == 0:
@@ -175,10 +174,10 @@ def evaluate(sess, dataset, model, step, max_dev_itr=100, verbose=True,
     while (dev_itr < max_dev_itr and max_dev_itr != 0) \
             or mode in ['test', 'train']:
         val_batch = dataset.next_batch(FLAGS.batch_size, rescale=[0.0, 1.0],
-                                       pad=model.args["sequence_length"])
+                       pad=model.args["sequence_length"], sentence_pad=15)
         val_loss, val_pco, val_mse, val_ratings = \
             model.evaluate_step(sess, val_batch.text, val_batch.ratings,
-                                val_batch.lengths)
+                                val_batch.sentences)
         avg_val_loss += val_mse
         avg_val_pco += val_pco[0]
         all_dev_review += id2seq(val_batch.text, dataset.vocab_i2w)

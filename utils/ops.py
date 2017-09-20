@@ -41,7 +41,7 @@ def multi_filter_conv_block(input, n_filters, reuse=False,
 
 
 def lstm_block(input, hidden_units=128, dropout=0.5, reuse=False, layers=1,
-                           dynamic=True, return_seq=False, bidirectional=False):
+                           dynamic=True, return_seq=False, bidirectional=False, name='lstm'):
     output = None
     prev_output = input
     for n_layer in range(layers):
@@ -193,3 +193,19 @@ def generate_episode(memory, query, facts, hop_index, hidden_size, input_lengths
                                        dtype=np.float64,
                                        sequence_length=input_lengths)
     return episode, attention_softmax
+
+def embed_sentences(sentences, embedding_weights):
+    sent_lists = tf.unstack(sentences, axis=0)
+    review_sent_feature = []
+    sent_features = []
+    for s_i, sents in enumerate(sent_lists):
+        embedded_review = tf.nn.embedding_lookup(embedding_weights,
+                                                    sents)
+        reuse = False if s_i == 0 else True
+        embedded_sentences = lstm_block(embedded_review, reuse=reuse, dynamic=False,
+                                        bidirectional=True, name='sents')
+        review_sent_feature.append(embedded_sentences)
+        sent_feature = tf.reduce_sum(embedded_sentences, axis=0, name='sent_feature')
+        sent_features.append(sent_feature)
+    stacked_features = tf.stack(sent_features)
+    return stacked_features, review_sent_feature

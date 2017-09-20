@@ -33,7 +33,7 @@ tf.flags.DEFINE_integer("rnn_layers", 2, "Number of layers in the RNN")
 tf.flags.DEFINE_string("optimizer", 'adam', "Which Optimizer to use. "
                     "Available options are: adam, gradient_descent, adagrad, "
                     "adadelta, rmsprop")
-tf.flags.DEFINE_integer("learning_rate", 0.0001, "Learning Rate")
+tf.flags.DEFINE_float("learning_rate", 0.0001, "Learning Rate")
 tf.flags.DEFINE_boolean("bidirectional", True, "Flag to have Bidirectional "
                                                "LSTMs")
 tf.flags.DEFINE_integer("sequence_length", 100, "maximum length of a sequence")
@@ -307,10 +307,10 @@ if __name__ == '__main__':
     ds = None
     if FLAGS.dataset == 'amazon_de':
         print('Using the Amazon Reviews DE dataset')
-        ds = AmazonReviewsGerman()
+        ds = AmazonReviewsGerman(data_balancing=True)
     elif FLAGS.dataset == 'hotel_reviews':
         print('Using the Amazon Reviews DE dataset')
-        ds = HotelReviews()
+        ds = HotelReviews(data_balancing=True)
     else:
         raise NotImplementedError('Dataset {} has not been '
                                   'implemented yet'.format(FLAGS.dataset))
