@@ -133,11 +133,11 @@ def read_data_save_db(f_path, target_dir,lang = 'en'):
         for i, row in enumerate(f.readlines()):
             print('line',i)
             #hotel
-            #rating = int(json.loads(row)['ratings']['overall'])
-            #review = json.loads(row)['text']
+            rating = int(json.loads(row)['ratings']['overall'])
+            review = json.loads(row)['text']
             #amazon
-            rating = int(json.loads(row)['review_rating'])
-            review = json.loads(row)['review_text']
+            #rating = int(json.loads(row)['review_rating'])
+            #review = json.loads(row)['review_text']
 
 
             doc = nlp(review.lower())
@@ -166,19 +166,28 @@ def read_data_save_db(f_path, target_dir,lang = 'en'):
     con.close()
 
 
+def query_count(fname, label=None):
+    con = sqlite3.connect(fname)
+    if label:
+        df = pd.read_sql_query("SELECT * from worddb where label =%i" % (label), con)
+    else:
+        df = pd.read_sql_query("SELECT * from worddb", con)
+    vocabolary = df['word_lemma'].value_counts()
+    con.close()
+    return vocabolary.to_dict()
+
 
 def analyze_data(fname):
     con = sqlite3.connect(fname)
     df = pd.read_sql_query("SELECT * from worddb", con)
+    vocabolary = df['word_lemma'].value_counts()
+    print(vocabolary.to_dict())
+    for c in range(1,6):
+        df = pd.read_sql_query("SELECT * from worddb where label =%i"%(c), con)
+        vocabolary = df['word_lemma'].value_counts()
+        print(vocabolary.to_dict())
 
-    print(df)
+read_data_save_db('/home/scstech/WORK/ovation_proj/Ovation/train.txt','hotel')
 
-#read_data_save_db('/home/scstech/WORK/ovation_proj/Ovation/dd/train.txt','TT')
-
-#analyze_data('/home/scstech/WORK/ovation_proj/Ovation/utils/T/train.sqlite')
-
-
-
-
-
+#analyze_data('/home/scstech/WORK/ovation_proj/Ovation/utils/hotel/train.sqlite')
 
