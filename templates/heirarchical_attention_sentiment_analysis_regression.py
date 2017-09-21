@@ -232,6 +232,14 @@ def test(dataset, metadata_path, w2v, rescale=None):
         plt.savefig(figure_path)
         print("saved similarity plot at {}".format(figure_path))
 
+def infer(dataset, metadata_path, w2v, rescale=None):
+    print("Configuring Tensorflow Graph")
+    with tf.Graph().as_default():
+        sess, model = initialize_tf_graph(metadata_path, w2v)
+        dataset.test.open()
+        test_batch = dataset.test.next_batch(FLAGS.batch_size, rescale=[0.0, 1.0], pad=model.args['sequence_length'])
+        sentiment, attention = model.infer(sess, test_batch.text)
+        print(attention)
 
 def results(dataset, metadata_path, w2v, rescale=None):
     print("Configuring Tensorflow Graph")
@@ -323,3 +331,5 @@ if __name__ == '__main__':
         test(ds, ds.metadata_path, ds.w2v)
     elif FLAGS.mode == 'results':
         results(ds, ds.metadata_path, ds.w2v)
+    elif FLAGS.mode == 'infer':
+        infer(ds, ds.metadata_path, ds.w2v)
