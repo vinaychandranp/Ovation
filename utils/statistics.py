@@ -121,6 +121,7 @@ def read_data_save_db(f_path, target_dir,lang = 'en'):
     nlp = spacy.load(lang)
 
     loc_file = os.path.join(target_dir, fname+'.sqlite')
+    os.remove(loc_file)
     con = sqlite3.connect(loc_file)
 
 
@@ -151,11 +152,12 @@ def read_data_save_db(f_path, target_dir,lang = 'en'):
                     if data_row['word_nltk']!=data_row['word_lemma']:
                         print(data_row)
                     '''
-                    data_row = {'position': w, 'review_id': i, 'word_': token_.text, 'word_lemma': token_.lemma_, 'label': rating, 'pos': token_.pos_, 'tag': token_.tag_}
+                    data_row = {'index' : c,'position': w, 'review_id': i, 'word_': token_.text, 'word_lemma': token_.lemma_, 'label': rating, 'pos': token_.pos_, 'tag': token_.tag_}
                     c+=1
                     words.append(data_row)
-            df = pd.DataFrame(words)
-            df.to_sql("worddb", con, if_exists="replace")
+            df = pd.DataFrame(words,columns=data_row.keys())
+            df.set_index('index')
+            df.to_sql("worddb", con, if_exists="append")
     con.close()
 
 
@@ -166,7 +168,7 @@ def analyze_data(fname):
 
     print(df)
 
-read_data_save_db('/home/scstech/WORK/ovation_proj/Ovation/train.txt','T')
+#read_data_save_db('/home/scstech/WORK/ovation_proj/Ovation/train.txt','T')
 
 analyze_data('/home/scstech/WORK/ovation_proj/Ovation/utils/T/train.sqlite')
 
