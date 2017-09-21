@@ -35,14 +35,14 @@ def compute(path,target_dir,n_p = 5, lang='en'):
 
     i = 0
     with open(path, 'r') as f:
-        text = f.read()
+        all_dataset = f.read().splitlines()
 
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)
 
     nlp = spacy.load(lang)
 
-    all_dataset = text.splitlines()
+
     a, b = os.path.split(path)
     fname = b.split('.')[0]
     loc_file = os.path.join(target_dir, fname + '.sqlite')
