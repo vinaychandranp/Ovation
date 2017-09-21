@@ -175,7 +175,7 @@ def compute_measure_classification(fname, ext='pdf'):
     print('Evaluation Metrics')
 
     print('ACCURACY', accuracy_score(y_true, y_pred))
-    labels = range(max(y_true)+1)
+    labels = range(1,6)
     precision, recall, fbeta, support = precision_recall_fscore_support(y_true, y_pred, average=None,labels=labels)
 
     print('Precision, Recall, F1')
@@ -196,7 +196,7 @@ def compute_measure_regression(fname, ext='pdf'):
     print('Evaluation Metrics')
 
     print('ACCURACY', accuracy_score(y_pred, y_target))
-    labels = range(0,5)
+    labels = range(1,6)
     precision, recall, fbeta, support = precision_recall_fscore_support(y_target, y_pred, average=None,labels=labels)
 
     print('Precision, Recall, F1')
