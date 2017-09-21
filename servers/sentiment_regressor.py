@@ -2,12 +2,14 @@ import datasets
 import tflearn
 import json
 
+import numpy as np
 import tensorflow as tf
 
 
 from flask import Flask
 from flask import request
 from flask import Response
+from datasets import AmazonReviewsGerman
 from datasets import HotelReviews
 from models import SentenceSentimentRegressor
 
@@ -31,7 +33,7 @@ tf.flags.DEFINE_string("optimizer", 'adam', "Which Optimizer to use. "
 tf.flags.DEFINE_integer("learning_rate", 0.0001, "Learning Rate")
 tf.flags.DEFINE_boolean("bidirectional", True, "Flag to have Bidirectional "
                                                "LSTMs")
-tf.flags.DEFINE_integer("sequence_length", 100, "maximum length of a sequence")
+tf.flags.DEFINE_integer("sequence_length", 150, "maximum length of a sequence")
 
 # Training parameters
 tf.flags.DEFINE_integer("max_checkpoints", 100, "Maximum number of "
@@ -62,6 +64,8 @@ tf.flags.DEFINE_string("mode", "train", "'train' or 'test or results'")
 tf.flags.DEFINE_string("dataset", "amazon_de", "'The sentiment analysis "
                            "dataset that you want to use. Available options "
                            "are amazon_de and hotel_reviews")
+tf.flags.DEFINE_string("lang", "en", "language of choice")
+tf.flags.DEFINE_string("port", "8080", "Port number")
 
 
 FLAGS = tf.flags.FLAGS
@@ -89,7 +93,16 @@ def initialize_tf_graph(metadata_path, w2v):
     spr_model.easy_setup(sess)
     return sess, spr_model
 
-ds = HotelReviews()
+ds = None
+if FLAGS.dataset == 'amazon_de':
+    print('Using the Amazon Reviews DE dataset')
+    ds = AmazonReviewsGerman(data_balancing=True)
+elif FLAGS.dataset == 'hotel_reviews':
+    print('Using the Amazon Reviews DE dataset')
+    ds = HotelReviews(data_balancing=True)
+else:
+    raise NotImplementedError('Dataset {} has not been '
+                              'implemented yet'.format(FLAGS.dataset))
 sess, spr_model = initialize_tf_graph(ds.metadata_path, ds.w2v)
 tflearn.is_training(False, session=sess)
 
@@ -97,7 +110,7 @@ def get_sentiment(input_str):
     global ds
     global spr_model
     global sess
-    tokenized_input = [datasets.tokenize(input_str, lang='en')]
+    tokenized_input = [datasets.tokenize(input_str, lang='de')]
     text = datasets.seq2id(tokenized_input, ds.w2i)
     text = datasets.padseq(text, pad=150)
     sentiment = spr_model.infer(sess, text)
@@ -111,14 +124,14 @@ def process_post_request(request):
     print('input text: '.format(text))
     response = {}
     sentiment = get_sentiment(text)[0]
-    response['score'] = sentiment
+    response['score'] = str(sentiment)
     response['reason'] = 'some reason'
     return response
 
 
 def start_server(port):
     app = Flask(__name__)
-    @app.route('/generateSentiment/en', methods=['POST'])
+    @app.route('/generateSentiment/{}'.format(FLAGS.lang), methods=['POST'])
     def sentiment():
         response = process_post_request(request)
         r = Response(response=json.dumps(response),
@@ -127,7 +140,7 @@ def start_server(port):
         r.headers["Content-Type"] = "text/plain; charset=utf-8"
         r.encoding = 'utf8'
         return r
-    app.run(port=port)
+    app.run(host='0.0.0.0', port=port)
 
 if __name__ == '__main__':
-    start_server(5000)
+    start_server(FLAGS.port)

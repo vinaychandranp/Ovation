@@ -2,6 +2,7 @@ import os
 import datetime
 import datasets
 import tflearn
+import json
 
 import numpy as np
 import tensorflow as tf
@@ -9,12 +10,14 @@ import matplotlib.pyplot as plt
 import pyqt_fit.nonparam_regression as smooth
 from scipy.stats import pearsonr
 from sklearn.metrics import mean_squared_error
-
+from flask import Flask
+from flask import request
+from flask import Response
 from datasets import AmazonReviewsGerman
 from datasets import HotelReviews
 from datasets import id2seq
 from pyqt_fit import npr_methods
-from models import HeirarchicalAttentionSentimentClassifier
+from models import HeirarchicalAttentionSentimentRegressor
 
 # Model Parameters
 tf.flags.DEFINE_integer("embedding_dim", 300, "Dimensionality of character "
@@ -38,7 +41,7 @@ tf.flags.DEFINE_string("optimizer", 'adam', "Which Optimizer to use. "
 tf.flags.DEFINE_float("learning_rate", 0.0001, "Learning Rate")
 tf.flags.DEFINE_boolean("bidirectional", True, "Flag to have Bidirectional "
                                                "LSTMs")
-tf.flags.DEFINE_integer("sequence_length", 100, "maximum length of a sequence")
+tf.flags.DEFINE_integer("sequence_length", 150, "maximum length of a sequence")
 
 # Training parameters
 tf.flags.DEFINE_integer("max_checkpoints", 100, "Maximum number of "
@@ -65,17 +68,21 @@ tf.flags.DEFINE_string("data_dir", "/scratch", "path to the root of the data "
 tf.flags.DEFINE_string("experiment_name",
                        "AMAZON_SENTIMENT_CNN_LSTM_REGRESSION",
                        "Name of your model")
-tf.flags.DEFINE_string("mode", "train", "'train' or 'test or results'")
+tf.flags.DEFINE_string("mode", "train", "'train' or 'test or results, INFER'")
 tf.flags.DEFINE_string("dataset", "amazon_de", "'The sentiment analysis "
                            "dataset that you want to use. Available options "
                            "are amazon_de and hotel_reviews")
+tf.flags.DEFINE_string("lang", "en", "language of choice")
+tf.flags.DEFINE_string("port", "8080", "Port number")
 
 
 FLAGS = tf.flags.FLAGS
 FLAGS._parse_flags()
-
+sess, spr_model = None, None
 
 def initialize_tf_graph(metadata_path, w2v):
+    global sess
+    global spr_model
     config = tf.ConfigProto(
         allow_soft_placement=FLAGS.allow_soft_placement,
         log_device_placement=FLAGS.log_device_placement)
@@ -84,7 +91,7 @@ def initialize_tf_graph(metadata_path, w2v):
     print("Session Started")
 
     with sess.as_default():
-        spr_model = HeirarchicalAttentionSentimentClassifier(FLAGS.__flags)
+        spr_model = HeirarchicalAttentionSentimentRegressor(FLAGS.__flags)
         spr_model.show_train_params()
         spr_model.build_model(metadata_path=metadata_path,
                                   embedding_weights=w2v)
@@ -94,14 +101,18 @@ def initialize_tf_graph(metadata_path, w2v):
     print('Setting Up the Model. You can do it one at a time. In that case '
           'drill down this method')
     spr_model.easy_setup(sess)
+
     return sess, spr_model
 
 
-def train(dataset, metadata_path, w2v):
+def train(dataset, metadata_path, w2v, getout=False):
     print("Configuring Tensorflow Graph")
     with tf.Graph().as_default():
 
         sess, spr_model = initialize_tf_graph(metadata_path, w2v)
+        if getout:
+            tflearn.is_training(False, session=sess)
+            return
 
         print('Opening the datasets')
         dataset.train.open()
@@ -300,10 +311,53 @@ def results(dataset, metadata_path, w2v, rescale=None):
         print("saved similarity plot at {}".format(figure_path))
         print("saved regression plot at {}".format(reg_fig_path))
 
+
 def non_parametric_regression(xs, ys, method):
     reg = smooth.NonParamRegression(xs, ys, method=method)
     reg.fit()
     return reg
+
+
+def get_sentiment(input_str):
+    global ds
+    global spr_model
+    global sess
+    tokenized_text = datasets.tokenize(input_str, lang='de')
+    length = [len(tokenized_text)] * 128
+    tokenized_input = [tokenized_text] * 128
+    text = datasets.seq2id(tokenized_input, ds.w2i)
+    text = datasets.padseq(text, pad=150)
+    results = spr_model.infer(sess, text, length)
+    return results[0], results[1], length
+
+
+def process_post_request(request):
+    # TODO: add sanity checks for the request before moving on
+    content = request.get_json()
+    text = content['input']
+    print('input text: '.format(text))
+    response = {}
+    sentiment, attention, length = get_sentiment(text)
+    response['score'] = str(sentiment[0])
+    response['reason'] = 'some reason'
+    attention = [item/np.sum(item)*100 for item in np.array(attention)[:,0,:length[0]]]
+    response['attention'] = [[str(i)for i in item] for item in attention]
+    return response
+
+
+def start_server(port):
+    app = Flask(__name__)
+    @app.route('/generateSentiment/{}'.format(FLAGS.lang), methods=['POST'])
+    def sentiment():
+        response = process_post_request(request)
+        r = Response(response=json.dumps(response),
+                     status=200, mimetype="application/json",
+                     content_type='application/json')
+        r.headers["Content-Type"] = "text/plain; charset=utf-8"
+        r.encoding = 'utf8'
+        return r
+    app.run(host='0.0.0.0', port=port)
+
 
 if __name__ == '__main__':
 
@@ -323,3 +377,7 @@ if __name__ == '__main__':
         test(ds, ds.metadata_path, ds.w2v)
     elif FLAGS.mode == 'results':
         results(ds, ds.metadata_path, ds.w2v)
+    elif FLAGS.mode == 'infer':
+        train(ds, ds.metadata_path, ds.w2v, getout=True)
+
+        start_server(FLAGS.port)

@@ -128,3 +128,16 @@ class SentenceSentimentClassifier(Model):
                     time_str, step, loss, accuracy))
         return loss, accuracy, correct_preds, out
 
+    def infer(self, sess, text):
+        """
+        A single evaluation step
+        """
+        feed_dict = {
+            self.sentence: text
+        }
+        ops = [self.out]
+        sentiment = sess.run(ops, feed_dict)
+
+        return sentiment
+
+

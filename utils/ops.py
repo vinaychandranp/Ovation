@@ -82,6 +82,47 @@ def lstm_block(input, hidden_units=128, dropout=0.5, reuse=False, layers=1,
                                        return_seq=return_seq)
     return output
 
+def sentence_lstm_block(input, hidden_units=128, dropout=0.5, reuse=False, layers=1,
+                           dynamic=True, return_seq=False, bidirectional=False, name='lstm'):
+    output = None
+    prev_output = input
+    for n_layer in range(layers):
+        if not bidirectional:
+            if n_layer < layers - 1:
+                output = tflearn.lstm(prev_output, hidden_units, dropout=dropout,
+                                dynamic=dynamic, reuse=reuse,
+                                scope='{}_lstm_{}'.format(name, n_layer), return_seq=True)
+                output = tf.stack(output, axis=0)
+                output = tf.transpose(output, perm=[1, 0, 2])
+                prev_output = output
+                continue
+            output = tflearn.lstm(prev_output, hidden_units, dropout=dropout,
+                                  dynamic=dynamic, reuse=reuse,
+                                  scope='{}_lstm_{}'.format(name, n_layer),
+                                  return_seq=return_seq)
+        else:
+            if n_layer < layers - 1:
+                output = bidirectional_rnn(prev_output,
+                                           BasicLSTMCell(hidden_units,
+                                                         reuse=reuse),
+                                           BasicLSTMCell(hidden_units,
+                                                         reuse=reuse),
+                                           dynamic=dynamic,
+                                           scope='{}_blstm_{}'.format(name, n_layer),
+                                           return_seq=True)
+                output = tf.stack(output, axis=0)
+                output = tf.transpose(output, perm=[1, 0, 2])
+                prev_output = output
+                continue
+            output = bidirectional_rnn(prev_output,
+                                       BasicLSTMCell(hidden_units,
+                                                     reuse=reuse),
+                                       BasicLSTMCell(hidden_units,
+                                                     reuse=reuse),
+                                       dynamic=dynamic,
+                                       scope='{}_blstm_{}'.format(name, n_layer),
+                                       return_seq=return_seq)
+    return output
 
 def embedding_layer(metadata_path=None, embedding_weights=None,
                     name='W_embedding', trainable=True, vocab_size=None,
@@ -202,7 +243,7 @@ def embed_sentences(sentences, embedding_weights):
         embedded_review = tf.nn.embedding_lookup(embedding_weights,
                                                     sents)
         reuse = False if s_i == 0 else True
-        embedded_sentences = lstm_block(embedded_review, reuse=reuse, dynamic=False,
+        embedded_sentences = sentence_lstm_block(embedded_review, reuse=reuse, dynamic=False,
                                         bidirectional=True, name='sents')
         review_sent_feature.append(embedded_sentences)
         sent_feature = tf.reduce_sum(embedded_sentences, axis=0, name='sent_feature')

@@ -253,6 +253,30 @@ class Model(ABC):
         else:
             print('Could not load checkpoints.  Training a new model')
 
+    def optimistic_restore(self, sess):
+
+        print('Trying to resume training from a previous checkpoint' +
+              str(tf.train.latest_checkpoint(self.checkpoint_dir)))
+        if tf.train.latest_checkpoint(self.checkpoint_dir) is not None:
+            save_file = tf.train.latest_checkpoint(self.checkpoint_dir)
+            reader = tf.train.NewCheckpointReader(save_file)
+            saved_shapes = reader.get_variable_to_shape_map()
+            var_names = sorted([(var.name, var.name.split(':')[0]) for var in tf.global_variables()
+                                if var.name.split(':')[0] in saved_shapes])
+            restore_vars = []
+            with tf.variable_scope('', reuse=True):
+                for var_name, saved_var_name in var_names:
+                    curr_var = tf.get_variable(saved_var_name)
+                    var_shape = curr_var.get_shape().as_list()
+                    if var_shape == saved_shapes[saved_var_name]:
+                        restore_vars.append(curr_var)
+            saver = tf.train.Saver(restore_vars)
+            saver.restore(sess, save_file)
+            print('Successfully loaded model. Resuming training.')
+        else:
+            print('Could not load checkpoints.  Training a new model')
+
+
     def easy_setup(self, sess):
         print('Computing Gradients')
         self.compute_gradients()
@@ -272,5 +296,5 @@ class Model(ABC):
 
         print('Loading Saved Model')
         self.load_saved_model(sess)
-
+        #self.optimistic_restore(sess)
 
