@@ -35,7 +35,7 @@ def compute(path,target_dir,n_p = 5, lang='en'):
 
     i = 0
     with open(path, 'r') as f:
-        text = f.read().readlines()
+        text = f.read()
 
 
     nlp = spacy.load(lang)
