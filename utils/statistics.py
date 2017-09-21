@@ -156,7 +156,7 @@ def read_data_save_db(f_path, target_dir,lang = 'en'):
                     words.append(data_row)
             df = pd.DataFrame(words)
             df.to_sql("worddb", con, if_exists="replace")
-
+    con.close()
 
 
 
