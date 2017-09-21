@@ -34,15 +34,15 @@ def plot_cm(cm, values, title='Confusion matrix', cmap=plt.cm.rainbow):
                         horizontalalignment='center',
                         verticalalignment='center')
 
-def compute_confusion_matrix(y_test, y_pred,fname, plot=True):
+def compute_confusion_matrix(y_true, y_pred,fname, plot=True):
 
     #update index
 
-    y_test = np.array(y_test) + 1
+    y_true = np.array(y_true) + 1
     y_pred = np.array(y_pred) + 1
 
     # Compute confusion matrix
-    cm = confusion_matrix(y_test, y_pred)
+    cm = confusion_matrix(y_true, y_pred)
     np.set_printoptions(precision=2)
     print('Confusion matrix, without normalization')
     print(cm)
@@ -131,9 +131,9 @@ def read_txt_file_classification(fname):
 
 
             class_predicted = np.argmax(y_p)
-            class_target = np.argmax(y_t)
+            class_true = np.argmax(y_t)
             #print(y_p, y_t, class_predicted, class_target)
-            dataset.append((text, y_p, y_t, class_predicted, class_target))
+            dataset.append((text, y_p, y_t, class_predicted, class_true))
 
         print('TOT LINES', tot)
 
@@ -152,9 +152,9 @@ def read_txt_file_regression(fname):
 
 
             class_predicted = int(np.floor(y_p + 0.5))
-            class_target = int(y_t)
+            class_true = int(y_t)
             #print(y_p, y_t, class_predicted, class_target)
-            dataset.append((text, y_p, y_t, class_predicted, class_target))
+            dataset.append((text, y_p, y_t, class_predicted, class_true))
 
         print('TOT LINES', tot)
 
@@ -166,18 +166,18 @@ def compute_measure_classification(fname, ext='pdf'):
     a, b = os.path.split(fname)
     plot_fname = os.path.join(a,b.split('.')[0]+'_plot.'+ext)
     dataset = read_txt_file_classification(fname)
-    _, _, _, y_pred, y_target = zip(*dataset)
+    _, _, _, y_pred, y_true = zip(*dataset)
 
     print('Evaluation Metrics')
 
-    print('ACCURACY', accuracy_score(y_pred, y_target))
-    labels = range(max(y_target)+1)
-    precision, recall, fbeta, support = precision_recall_fscore_support(y_target, y_pred, average=None,labels=labels)
+    print('ACCURACY', accuracy_score(y_true, y_pred))
+    labels = range(max(y_true)+1)
+    precision, recall, fbeta, support = precision_recall_fscore_support(y_true, y_pred, average=None,labels=labels)
 
     print('Precision, Recall, F1')
     print(';'.join(map(str,labels)))
     print(np.array([precision,recall,fbeta]))
-    compute_confusion_matrix(y_target, y_pred, plot_fname,plot=True)
+    compute_confusion_matrix(y_true, y_pred, plot_fname,plot=True)
 
 
 def compute_measure_regression(fname, ext='pdf'):
@@ -199,4 +199,4 @@ def compute_measure_regression(fname, ext='pdf'):
     compute_confusion_matrix(y_target, y_pred, plot_fname,plot=True)
 
 
-#compute_measure_classification('/home/scstech/WORK/ovation_proj/Ovation/test_samples_2363.txt')
+compute_measure_classification('/home/scstech/WORK/ovation_proj/Ovation/test_samples_2363.txt')
