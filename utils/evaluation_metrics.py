@@ -149,6 +149,7 @@ def read_txt_file_regression(fname,rescale=(1,5)):
             tot+=1
             y_p = float(pred)
             y_t = float(target)
+            #ATTENTION: the GT has label values less then zero....
             if y_t>=0:
 
 
@@ -203,5 +204,5 @@ def compute_measure_regression(fname, ext='pdf'):
     print(np.array([precision,recall,fbeta]))
     compute_confusion_matrix(y_target, y_pred, plot_fname,plot=True)
 
-compute_measure_classification('/home/scstech/WORK/ovation_proj/Ovation/test_samples_2363.txt')
+#compute_measure_classification('/home/scstech/WORK/ovation_proj/Ovation/test_samples_2363.txt')
 #compute_measure_regression('/home/scstech/WORK/ovation_proj/Ovation/test_samples_4163.txt')
