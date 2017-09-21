@@ -7,8 +7,8 @@ import sqlite3
 
 nlp = spacy.load('en')
 
-def spacy_reader(dataset):
-    indx, row = zip(*dataset)
+def spacy_reader(line):
+    indx, row = line
     rating = int(json.loads(row)['ratings']['overall'])
     review = json.loads(row)['text']
 
