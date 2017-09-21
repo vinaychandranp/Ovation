@@ -14,7 +14,7 @@ from datasets import AmazonReviewsGerman
 from datasets import HotelReviews
 from datasets import id2seq
 from pyqt_fit import npr_methods
-from models import HeirarchicalAttentionSentimentClassifier
+from models import HeirarchicalAttentionSentimentRegressor
 
 # Model Parameters
 tf.flags.DEFINE_integer("embedding_dim", 300, "Dimensionality of character "
@@ -84,7 +84,7 @@ def initialize_tf_graph(metadata_path, w2v):
     print("Session Started")
 
     with sess.as_default():
-        spr_model = HeirarchicalAttentionSentimentClassifier(FLAGS.__flags)
+        spr_model = HeirarchicalAttentionSentimentRegressor(FLAGS.__flags)
         spr_model.show_train_params()
         spr_model.build_model(metadata_path=metadata_path,
                                   embedding_weights=w2v)
