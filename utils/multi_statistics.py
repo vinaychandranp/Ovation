@@ -60,8 +60,5 @@ def compute(path,target_dir,n_p = 5):
         print(i, i+dim)
 
 
-<<<<<<< HEAD
 compute('/scratch/OSA/data/datasets/hotel_reviews/train/train.txt','hotel_statistics_2',lang='en')
-=======
-compute('/scratch/OSA/data/datasets/hotel_reviews/train/train.txt','hotel2')
->>>>>>> 044784225a3f80642f32fc0b1f62f627b4d50a72
+
