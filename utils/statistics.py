@@ -121,7 +121,8 @@ def read_data_save_db(f_path, target_dir,lang = 'en'):
     nlp = spacy.load(lang)
 
     loc_file = os.path.join(target_dir, fname+'.sqlite')
-    os.remove(loc_file)
+    if os.path.isfile(loc_file):
+        os.remove(loc_file)
     con = sqlite3.connect(loc_file)
 
 
