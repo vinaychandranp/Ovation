@@ -32,8 +32,9 @@ def compute(path,target_dir,n_p = 5):
         nonlocal i
         chunk = text[i: i + dim]
         index = range(i, i + dim)
+        data = zip(index, chunk)
         with multiprocessing.Pool(processes=n_p) as pool:
-            words = pool.map(spacy_reader,zip(index, chunk) )
+            words = pool.map(spacy_reader,data)
             df = pd.DataFrame(words, columns=words[0].keys())
             df.to_sql("worddb", con, if_exists="append")
             i += dim
