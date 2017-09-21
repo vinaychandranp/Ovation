@@ -88,7 +88,7 @@ class HeirarchicalAttentionSentimentClassifier(Model):
             # generate n_hops episodes
             prev_memory = self.sentiment
 
-            for i in range(self.args['num_hops']):
+            for i in range(self.args['num_hops'] if 'num_hops' in  self.args else 5):
                 # get a new episode
                 print('==> generating episode', i)
                 episode, attn = ops.generate_episode(prev_memory, self.sentiment, fact_vecs, i,
@@ -190,3 +190,15 @@ class HeirarchicalAttentionSentimentClassifier(Model):
             print("EVAL: {}\tstep: {}\tloss: {:g}\t pco:{}\tmse: {}".format(time_str,
                                                         step, loss, pco, mse))
         return loss, pco, mse, sentiment
+
+    def infer(self, sess, text):
+        """
+        A single evaluation step
+        """
+        feed_dict = {
+            self.sentence: text
+        }
+        ops = [self.out]
+        sentiment = sess.run(ops, feed_dict)
+
+        return sentiment

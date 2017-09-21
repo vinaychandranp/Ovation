@@ -38,7 +38,7 @@ tf.flags.DEFINE_string("optimizer", 'adam', "Which Optimizer to use. "
 tf.flags.DEFINE_float("learning_rate", 0.0001, "Learning Rate")
 tf.flags.DEFINE_boolean("bidirectional", True, "Flag to have Bidirectional "
                                                "LSTMs")
-tf.flags.DEFINE_integer("sequence_length", 100, "maximum length of a sequence")
+tf.flags.DEFINE_integer("sequence_length", 150, "maximum length of a sequence")
 
 # Training parameters
 tf.flags.DEFINE_integer("max_checkpoints", 100, "Maximum number of "
