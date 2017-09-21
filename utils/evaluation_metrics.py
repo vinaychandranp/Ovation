@@ -38,8 +38,8 @@ def compute_confusion_matrix(y_true, y_pred,fname, plot=True):
 
     #update index
 
-    y_true = np.array(y_true) + 1
-    y_pred = np.array(y_pred) + 1
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
 
     # Compute confusion matrix
     cm = confusion_matrix(y_true, y_pred)
@@ -130,8 +130,8 @@ def read_txt_file_classification(fname):
             y_t = ast.literal_eval(target)
 
 
-            class_predicted = np.argmax(y_p)
-            class_true = np.argmax(y_t)
+            class_predicted = np.argmax(y_p) + 1
+            class_true = np.argmax(y_t) + 1
             #print(y_p, y_t, class_predicted, class_target)
             dataset.append((text, y_p, y_t, class_predicted, class_true))
 
@@ -139,7 +139,7 @@ def read_txt_file_classification(fname):
 
     return dataset
 
-def read_txt_file_regression(fname):
+def read_txt_file_regression(fname,rescale=(1,5)):
     dataset = []
     tot = 0
     with open(fname,'r') as f_res:
@@ -149,12 +149,15 @@ def read_txt_file_regression(fname):
             tot+=1
             y_p = float(pred)
             y_t = float(target)
+            if y_t>=0:
 
 
-            class_predicted = int(np.floor(y_p + 0.5))
-            class_true = int(y_t)
-            #print(y_p, y_t, class_predicted, class_target)
-            dataset.append((text, y_p, y_t, class_predicted, class_true))
+                y_pp = y_p*(rescale[1]-rescale[0]) + rescale[0]
+                y_tt = y_t*(rescale[1]-rescale[0]) + rescale[0]
+                class_predicted = int(np.floor(y_pp+0.5))
+                class_true = int(y_tt)
+                #print(y_p, y_t, class_predicted, class_target)
+                dataset.append((text, y_p, y_t, class_predicted, class_true))
 
         print('TOT LINES', tot)
 
@@ -179,18 +182,20 @@ def compute_measure_classification(fname, ext='pdf'):
     print(np.array([precision,recall,fbeta]))
     compute_confusion_matrix(y_true, y_pred, plot_fname,plot=True)
 
-
+#reggression issue: ratings 0 in 7 examples in test
 def compute_measure_regression(fname, ext='pdf'):
     print('READ DATA', fname)
     a, b = os.path.split(fname)
     plot_fname = os.path.join(a,b.split('.')[0]+'_plot.'+ext)
     dataset = read_txt_file_regression(fname)
-    _, _, _, y_pred, y_target = zip(*dataset)
+    _, _, y_t, y_pred, y_target = zip(*dataset)
+
+    print(np.unique(y_t, return_counts=True))
 
     print('Evaluation Metrics')
 
     print('ACCURACY', accuracy_score(y_pred, y_target))
-    labels = range(max(y_target)+1)
+    labels = range(0,5)
     precision, recall, fbeta, support = precision_recall_fscore_support(y_target, y_pred, average=None,labels=labels)
 
     print('Precision, Recall, F1')
@@ -198,5 +203,5 @@ def compute_measure_regression(fname, ext='pdf'):
     print(np.array([precision,recall,fbeta]))
     compute_confusion_matrix(y_target, y_pred, plot_fname,plot=True)
 
-
 compute_measure_classification('/home/scstech/WORK/ovation_proj/Ovation/test_samples_2363.txt')
+#compute_measure_regression('/home/scstech/WORK/ovation_proj/Ovation/test_samples_4163.txt')
