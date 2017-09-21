@@ -106,7 +106,7 @@ class DataSet(object):
                             'dataset.next_batch()')
         text, sentences, ratings_service, ratings_cleanliness, ratings_overall,\
         ratings_value, ratings_sleep_quality, ratings_rooms, titles, helpful_votes,\
-        lengths = [], [], [], [], [], [], [], [], [], [], []
+        lengths, sentence_lengths = [], [], [], [], [], [], [], [], [], [], [], []
 
         while len(text) < batch_size:
             row = self.datafile.readline()
@@ -118,6 +118,7 @@ class DataSet(object):
             text.append(datasets.tokenize(json_obj["text"], tokenizer))
             lengths.append(len(text[-1]))
             sentences.append(datasets.sentence_tokenizer((json_obj["text"])))
+            sentence_lengths.append(len(sentences[-1]))
             ratings_service.append(int(json_obj["ratings"]["service"])
                                    if 'service' in json_obj['ratings']
                                    else int(json_obj['ratings']['overall']))
@@ -200,7 +201,7 @@ class DataSet(object):
                            ratings=ratings_overall,
                            ratings_value=ratings_value,
                            ratings_sleep_quality=ratings_sleep_quality,
-                           ratings_rooms=ratings_rooms,
+                           ratings_rooms=ratings_rooms, sentence_lengths=sentence_lengths,
                            titles=titles, helpful_votes=helpful_votes, lengths=lengths)
         return batch
 
@@ -222,7 +223,7 @@ class DataSetBalanced(object):
         self.vocab_i2w = vocab[1]
         self.datafile = None
 
-        self.Batch = collections.namedtuple('Batch', ['text', 'lengths',
+        self.Batch = collections.namedtuple('Batch', ['text', 'lengths', 'sentence_lengths',
                                                       'sentences', 'ratings_service', 'ratings_cleanliness',
                                                       'ratings', 'ratings_value', 'ratings_sleep_quality',
                                                       'ratings_rooms', 'titles', 'helpful_votes'])
@@ -242,7 +243,7 @@ class DataSetBalanced(object):
                             'dataset.next_batch()')
         text, sentences, ratings_service, ratings_cleanliness, \
         ratings_overall, ratings_value, ratings_sleep_quality, ratings_rooms, \
-        titles, helpful_votes, lengths = [], [], [], [], [], [], [], [], [], [], []
+        titles, helpful_votes, lengths, sentence_lengths = [], [], [], [], [], [], [], [], [], [], [], []
 
         while len(text) < batch_size:
             row = self.datafile.readline()
@@ -255,6 +256,7 @@ class DataSetBalanced(object):
             text.append(datasets.tokenize(json_obj["text"], tokenizer))
             lengths.append(len(text[-1]))
             sentences.append(datasets.sentence_tokenizer((json_obj["text"])))
+            sentence_lengths.append(len(sentences[-1]))
             ratings_service.append(int(json_obj["ratings"]["service"])
                                    if 'service' in json_obj['ratings']
                                    else int(json_obj['ratings']['overall']))
@@ -337,7 +339,7 @@ class DataSetBalanced(object):
                            ratings=ratings_overall,
                            ratings_value=ratings_value,
                            ratings_sleep_quality=ratings_sleep_quality,
-                           ratings_rooms=ratings_rooms,
+                           ratings_rooms=ratings_rooms, sentence_lengths=sentence_lengths,
                            titles=titles, helpful_votes=helpful_votes, lengths=lengths)
         return batch
 
