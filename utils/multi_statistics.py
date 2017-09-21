@@ -40,10 +40,11 @@ def compute(path,target_dir,n_p = 5, lang='en'):
 
     nlp = spacy.load(lang)
 
-    all_dataset = text.readlines()
+    all_dataset = text.splitlines()
     a, b = os.path.split(path)
     fname = b.split('.')[0]
     loc_file = os.path.join(target_dir, fname + '.sqlite')
+    print(loc_file)
     if os.path.isfile(loc_file):
         os.remove(loc_file)
 
