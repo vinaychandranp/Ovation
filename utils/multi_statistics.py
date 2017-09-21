@@ -32,7 +32,7 @@ def compute(path,target_dir,n_p = 5):
         nonlocal i
         chunk = text[i: i + dim]
         index = range(i, i + dim)
-        data = zip(index, chunk)
+        data = [(a,b)for a,b in zip(index, chunk)]
         with multiprocessing.Pool(processes=n_p) as pool:
             words = pool.map(spacy_reader,data)
             df = pd.DataFrame(words, columns=words[0].keys())
