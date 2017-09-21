@@ -2,8 +2,7 @@ import os
 import datetime
 import datasets
 import tflearn
-import matplotlib
-matplotlib.use('Agg')
+
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -15,7 +14,7 @@ from datasets import AmazonReviewsGerman
 from datasets import HotelReviews
 from datasets import id2seq
 from pyqt_fit import npr_methods
-from models import SentimentRegressorSentence
+from models import SentimentMultitaskRegressor
 
 # Model Parameters
 tf.flags.DEFINE_integer("embedding_dim", 300, "Dimensionality of character "
@@ -29,7 +28,6 @@ tf.flags.DEFINE_float("l2_reg_beta", 0.0, "L2 regularizaion lambda ("
                                             "default: 0.0)")
 tf.flags.DEFINE_integer("hidden_units", 128, "Number of hidden units of the "
                                              "RNN Cell")
-tf.flags.DEFINE_integer("max_sentences", 15, "Max Sentences. Default 15")
 tf.flags.DEFINE_integer("n_filters", 500, "Number of filters ")
 tf.flags.DEFINE_integer("rnn_layers", 2, "Number of layers in the RNN")
 tf.flags.DEFINE_string("optimizer", 'adam', "Which Optimizer to use. "
@@ -63,7 +61,7 @@ tf.flags.DEFINE_float("gpu_fraction", 0.5, "Fraction of GPU to use")
 tf.flags.DEFINE_string("data_dir", "/scratch", "path to the root of the data "
                                            "directory")
 tf.flags.DEFINE_string("experiment_name",
-                       "SENTIMENT_CNN_LSTM_SENTS_REGRESSION",
+                       "AMAZON_SENTIMENT_CNN_LSTM_REGRESSION",
                        "Name of your model")
 tf.flags.DEFINE_string("mode", "train", "'train' or 'test or results'")
 tf.flags.DEFINE_string("dataset", "amazon_de", "'The sentiment analysis "
@@ -84,7 +82,7 @@ def initialize_tf_graph(metadata_path, w2v):
     print("Session Started")
 
     with sess.as_default():
-        spr_model = SentimentRegressorSentence(FLAGS.__flags)
+        spr_model = SentimentMultitaskRegressor(FLAGS.__flags)
         spr_model.show_train_params()
         spr_model.build_model(metadata_path=metadata_path,
                                   embedding_weights=w2v)
@@ -114,11 +112,12 @@ def train(dataset, metadata_path, w2v):
         tflearn.is_training(True, session=sess)
         while dataset.train.epochs_completed < FLAGS.num_epochs:
             train_batch = dataset.train.next_batch(batch_size=FLAGS.batch_size,
-                       sentence_pad=15, rescale=[0.0, 1.0], pad=spr_model.args["sequence_length"])
+                               rescale=[0.0, 1.0], pad=spr_model.args["sequence_length"])
             pco, mse, loss, step = spr_model.train_step(sess,
-                                                 train_batch.text,
-                                                 train_batch.ratings, train_batch.sentences,
-                                                 dataset.train.epochs_completed)
+                 train_batch.text, train_batch.ratings, train_batch.ratings_service,
+                    train_batch.ratings_cleanliness, train_batch.ratings_value,
+                        train_batch.ratings_sleep_quality, train_batch.ratings_rooms,
+                            dataset.train.epochs_completed)
 
             if step % FLAGS.evaluate_every == 0:
                 avg_val_loss, avg_val_pco, _ = evaluate(sess=sess,
@@ -175,10 +174,11 @@ def evaluate(sess, dataset, model, step, max_dev_itr=100, verbose=True,
     while (dev_itr < max_dev_itr and max_dev_itr != 0) \
             or mode in ['test', 'train']:
         val_batch = dataset.next_batch(FLAGS.batch_size, rescale=[0.0, 1.0],
-                       pad=model.args["sequence_length"], sentence_pad=15)
+                                       pad=model.args["sequence_length"])
         val_loss, val_pco, val_mse, val_ratings = \
-            model.evaluate_step(sess, val_batch.text, val_batch.ratings,
-                                val_batch.sentences)
+            model.evaluate_step(sess, val_batch.text, val_batch.ratings, val_batch.ratings_service,
+                            val_batch.ratings_cleanliness, val_batch.ratings_value,
+                                val_batch.ratings_sleep_quality, val_batch.ratings_rooms)
         avg_val_loss += val_mse
         avg_val_pco += val_pco[0]
         all_dev_review += id2seq(val_batch.text, dataset.vocab_i2w)
