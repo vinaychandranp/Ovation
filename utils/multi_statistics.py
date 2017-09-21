@@ -24,7 +24,7 @@ def compute(path,target_dir,n_p = 5, lang='en'):
 
 
     def next_chunk(text,con, dim = 1000):
-        global i
+        nonlocal i
         chunk = text[i, i + dim]
         index = range[i, i + dim]
         with multiprocessing.Pool(processes=n_p) as pool:
