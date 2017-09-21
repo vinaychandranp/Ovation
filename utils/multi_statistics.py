@@ -5,22 +5,27 @@ import pandas as pd
 import os
 import sqlite3
 
-def compute(path,target_dir,n_p = 5, lang='en'):
+nlp = spacy.load('en')
+
+def spacy_reader(dataset):
+    indx, row = zip(*dataset)
+    rating = int(json.loads(row)['ratings']['overall'])
+    review = json.loads(row)['text']
+
+    doc = nlp(review.lower())
+    #words = []
+    for w, token_ in enumerate(doc):
+
+        if not token_.is_stop and token_.pos_ != 'PUNCT':
+            data_row = {'position': w, 'review_id': id, 'word_': token_.text,
+                        'word_lemma': token_.lemma_,
+                        'label': rating, 'pos': token_.pos_, 'tag': token_.tag_}
+            return data_row
+
+
+
+def compute(path,target_dir,n_p = 5):
     i = 0
-    def spacy_reader(dataset):
-        indx, row = zip(*dataset)
-        rating = int(json.loads(row)['ratings']['overall'])
-        review = json.loads(row)['text']
-
-        doc = nlp(review.lower())
-        #words = []
-        for w, token_ in enumerate(doc):
-
-            if not token_.is_stop and token_.pos_ != 'PUNCT':
-                data_row = {'position': w, 'review_id': id, 'word_': token_.text,
-                            'word_lemma': token_.lemma_,
-                            'label': rating, 'pos': token_.pos_, 'tag': token_.tag_}
-                return data_row
 
 
     def next_chunk(text,con, dim = 1000):
@@ -40,9 +45,6 @@ def compute(path,target_dir,n_p = 5, lang='en'):
 
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)
-
-    nlp = spacy.load(lang)
-
 
     a, b = os.path.split(path)
     fname = b.split('.')[0]
