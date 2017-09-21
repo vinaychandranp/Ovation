@@ -6,7 +6,7 @@ import os
 import sqlite3
 
 def compute(path,target_dir,n_p = 5, lang='en'):
-    global i
+    i = 0
     def spacy_reader(dataset):
         indx, row = zip(*dataset)
         rating = int(json.loads(row)['ratings']['overall'])
@@ -24,6 +24,7 @@ def compute(path,target_dir,n_p = 5, lang='en'):
 
 
     def next_chunk(text,con, dim = 1000):
+        global i
         chunk = text[i, i + dim]
         index = range[i, i + dim]
         with multiprocessing.Pool(processes=n_p) as pool:
@@ -33,7 +34,7 @@ def compute(path,target_dir,n_p = 5, lang='en'):
             i += dim
         return i<len(text)
 
-    i = 0
+
     with open(path, 'r') as f:
         all_dataset = f.read().splitlines()
 
