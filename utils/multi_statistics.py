@@ -37,6 +37,8 @@ def compute(path,target_dir,n_p = 5, lang='en'):
     with open(path, 'r') as f:
         text = f.read()
 
+    if not os.path.isdir(target_dir):
+        os.makedirs(target_dir)
 
     nlp = spacy.load(lang)
 
