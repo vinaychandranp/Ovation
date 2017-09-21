@@ -133,11 +133,11 @@ def read_data_save_db(f_path, target_dir,lang = 'en'):
         for i, row in enumerate(f.readlines()):
             print('line',i)
             #hotel
-            rating = int(json.loads(row)['ratings']['overall'])
-            review = json.loads(row)['text']
+            #rating = int(json.loads(row)['ratings']['overall'])
+            #review = json.loads(row)['text']
             #amazon
-            #rating = int(json.loads(row)['review_rating'])
-            #review = json.loads(row)['review_text']
+            rating = int(json.loads(row)['review_rating'])
+            review = json.loads(row)['review_text']
 
 
             doc = nlp(review.lower())
@@ -189,5 +189,12 @@ def analyze_data(fname):
 
 read_data_save_db('/home/scstech/WORK/ovation_proj/Ovation/train.txt','hotel')
 
-#analyze_data('/home/scstech/WORK/ovation_proj/Ovation/utils/hotel/train.sqlite')
+#read_data_save_db('/home/scstech/WORK/ovation_proj/Ovation/dd/train.txt','TT')
+
+#analyze_data('/home/scstech/WORK/ovation_proj/Ovation/utils/T/train.sqlite')
+
+
+
+
+
 
