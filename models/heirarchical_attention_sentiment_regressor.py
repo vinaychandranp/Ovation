@@ -191,14 +191,15 @@ class HeirarchicalAttentionSentimentRegressor(Model):
                                                         step, loss, pco, mse))
         return loss, pco, mse, sentiment
 
-    def infer(self, sess, text):
+    def infer(self, sess, text, length):
         """
         A single evaluation step
         """
         feed_dict = {
-            self.sentence: text
+            self.input: text,
+            self.input_length: length
         }
-        ops = [self.out]
+        ops = [self.output]
         sentiment = sess.run(ops, feed_dict)
 
         return sentiment

@@ -10,11 +10,13 @@ from flask import request
 from flask import Response
 from datasets import AmazonReviewsGerman
 from datasets import HotelReviews
-from models import HeirarchicalAttentionSentimentClassifier
+from models import HeirarchicalAttentionSentimentRegressor
 
 # Model Parameters
 tf.flags.DEFINE_integer("embedding_dim", 300, "Dimensionality of character "
                                             "embedding (default: 300)")
+tf.flags.DEFINE_integer("sentiment_size", 128, "sentiment size")
+tf.flags.DEFINE_integer("num_hops", 5, "num of hops")
 tf.flags.DEFINE_boolean("train_embeddings", True, "True if you want to train "
                                                   "the embeddings False "
                                                   "otherwise")
@@ -29,7 +31,7 @@ tf.flags.DEFINE_integer("rnn_layers", 2, "Number of layers in the RNN")
 tf.flags.DEFINE_string("optimizer", 'adam', "Which Optimizer to use. "
                     "Available options are: adam, gradient_descent, adagrad, "
                     "adadelta, rmsprop")
-tf.flags.DEFINE_integer("learning_rate", 0.0001, "Learning Rate")
+tf.flags.DEFINE_float("learning_rate", 0.0001, "Learning Rate")
 tf.flags.DEFINE_boolean("bidirectional", True, "Flag to have Bidirectional "
                                                "LSTMs")
 tf.flags.DEFINE_integer("sequence_length", 150, "maximum length of a sequence")
@@ -57,7 +59,7 @@ tf.flags.DEFINE_float("gpu_fraction", 0.5, "Fraction of GPU to use")
 tf.flags.DEFINE_string("data_dir", "/scratch", "path to the root of the data "
                                            "directory")
 tf.flags.DEFINE_string("experiment_name",
-                       "AMAZON_ATT_SENTIMENT_CNN_LSTM_REGRESSION",
+                       "AMAZON_SENTIMENT_CNN_LSTM_REGRESSION",
                        "Name of your model")
 tf.flags.DEFINE_string("mode", "train", "'train' or 'test or results'")
 tf.flags.DEFINE_string("dataset", "amazon_de", "'The sentiment analysis "
@@ -80,7 +82,8 @@ def initialize_tf_graph(metadata_path, w2v):
     print("Session Started")
 
     with sess.as_default():
-        spr_model = HeirarchicalAttentionSentimentClassifier(FLAGS.__flags)
+        tflearn.config.init_training_mode()
+        spr_model = HeirarchicalAttentionSentimentRegressor(FLAGS.__flags)
         spr_model.show_train_params()
         spr_model.build_model(metadata_path=metadata_path,
                                   embedding_weights=w2v)
@@ -102,8 +105,9 @@ elif FLAGS.dataset == 'hotel_reviews':
 else:
     raise NotImplementedError('Dataset {} has not been '
                               'implemented yet'.format(FLAGS.dataset))
-sess, spr_model = initialize_tf_graph(ds.metadata_path, ds.w2v)
-tflearn.is_training(False, session=sess)
+with tf.Graph().as_default():
+    sess, spr_model = initialize_tf_graph(ds.metadata_path, ds.w2v)
+    tflearn.is_training(False, session=sess)
 
 def get_sentiment(input_str):
     global ds
