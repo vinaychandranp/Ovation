@@ -14,7 +14,7 @@ from tensorflow.contrib.tensorboard.plugins import projector
 from tflearn.layers.core import dropout
 
 
-class HeirarchicalAttentionSentimentClassifier(Model):
+class HeirarchicalAttentionSentimentRegressor(Model):
     """
     A LSTM network for predicting the Sentiment of a sentence.
     """
