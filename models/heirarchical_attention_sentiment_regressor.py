@@ -68,7 +68,7 @@ class HeirarchicalAttentionSentimentClassifier(Model):
         #                                            self.input)
 
         self.sentiment = tf.get_variable('sentiment', [self.args['batch_size'],
-                                                       self.args['sentiment_size']], dtype=tf.float64)
+                                                       self.args['hidden_units']], dtype=tf.float64)
 
         with tf.variable_scope("input", initializer=tf.contrib.layers.xavier_initializer()):
             print('==> get input representation')
@@ -131,7 +131,7 @@ class HeirarchicalAttentionSentimentClassifier(Model):
                                              dtype=tf.float64, sequence_length=self.input_length)
 
         # f<-> = f-> + f<-
-        fact_vecs = tf.reduce_sum(tf.stack(outputs), axis=0)
+        fact_vecs = tf.add_n(outputs)
 
         # apply dropout
         fact_vecs = dropout(fact_vecs, self.args['dropout'])
