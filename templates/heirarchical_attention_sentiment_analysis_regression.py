@@ -110,7 +110,9 @@ def train(dataset, metadata_path, w2v, getout=False):
     with tf.Graph().as_default():
 
         sess, spr_model = initialize_tf_graph(metadata_path, w2v)
-        if getout: return
+        if getout:
+            tflearn.is_training(False, session=sess)
+            return
 
         print('Opening the datasets')
         dataset.train.open()
@@ -325,8 +327,8 @@ def get_sentiment(input_str):
     tokenized_input = [tokenized_text] * 128
     text = datasets.seq2id(tokenized_input, ds.w2i)
     text = datasets.padseq(text, pad=150)
-    sentiment = spr_model.infer(sess, text, length)
-    return sentiment
+    results = spr_model.infer(sess, text, length)
+    return results[0], results[1], length
 
 
 def process_post_request(request):
@@ -335,9 +337,11 @@ def process_post_request(request):
     text = content['input']
     print('input text: '.format(text))
     response = {}
-    sentiment = get_sentiment(text)[0][0]
-    response['score'] = str(sentiment)
+    sentiment, attention, length = get_sentiment(text)
+    response['score'] = str(sentiment[0])
     response['reason'] = 'some reason'
+    attention = [item/np.sum(item)*100 for item in np.array(attention)[:,0,:length[0]]]
+    response['attention'] = [[str(i)for i in item] for item in attention]
     return response
 
 
@@ -348,7 +352,7 @@ def start_server(port):
         response = process_post_request(request)
         r = Response(response=json.dumps(response),
                      status=200, mimetype="application/json",
-                     content_type='utf-8')
+                     content_type='application/json')
         r.headers["Content-Type"] = "text/plain; charset=utf-8"
         r.encoding = 'utf8'
         return r
@@ -375,4 +379,5 @@ if __name__ == '__main__':
         results(ds, ds.metadata_path, ds.w2v)
     elif FLAGS.mode == 'infer':
         train(ds, ds.metadata_path, ds.w2v, getout=True)
+
         start_server(FLAGS.port)
