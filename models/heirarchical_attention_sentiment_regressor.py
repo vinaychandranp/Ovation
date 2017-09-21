@@ -198,7 +198,7 @@ class HeirarchicalAttentionSentimentRegressor(Model):
         feed_dict = {
             self.sentence: text
         }
-        ops = [self.out]
-        sentiment = sess.run(ops, feed_dict)
+        ops = [self.output, self.attentions]
+        sentiment, attentions = sess.run(ops, feed_dict)
 
-        return sentiment
+        return sentiment, attentions
