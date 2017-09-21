@@ -55,7 +55,7 @@ def compute(path,target_dir,n_p = 5):
         os.remove(loc_file)
 
     con = sqlite3.connect(loc_file)
-    dim=2000
+    dim=500
     while next_chunk(all_dataset,con):
         print(i, i+dim)
 
