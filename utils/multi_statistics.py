@@ -17,10 +17,11 @@ def spacy_reader(line):
     for w, token_ in enumerate(doc):
 
         if not token_.is_stop and token_.pos_ != 'PUNCT':
-            data_row = {'position': w, 'review_id': id, 'word_': token_.text,
+            data_row = {'position': w, 'review_id': indx, 'word_': token_.text,
                         'word_lemma': token_.lemma_,
                         'label': rating, 'pos': token_.pos_, 'tag': token_.tag_}
             return data_row
+    return None
 
 
 
@@ -35,8 +36,11 @@ def compute(path,target_dir,n_p = 5):
         data = [(a,b)for a,b in zip(index, chunk)]
         with multiprocessing.Pool(processes=n_p) as pool:
             words = pool.map(spacy_reader,data)
-            df = pd.DataFrame(words, columns=words[0].keys())
-            df.to_sql("worddb", con, if_exists="append")
+            print('words', len(words))
+            for word in words:
+
+                df = pd.DataFrame(word, columns=word.keys())
+                df.to_sql("worddb", con, if_exists="append")
             i += dim
         return i<len(text)
 
@@ -60,5 +64,5 @@ def compute(path,target_dir,n_p = 5):
         print(i, i+dim)
 
 
-compute('/scratch/OSA/data/datasets/hotel_reviews/train/train.txt','hotel_statistics_2')
+compute('../train.txt','hotel_statistics_2')
 
