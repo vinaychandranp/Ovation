@@ -173,7 +173,7 @@ def analyze_data(fname):
 
     print(df)
 
-read_data_save_db('/home/scstech/WORK/ovation_proj/Ovation/dd/train.txt','TT')
+#read_data_save_db('/home/scstech/WORK/ovation_proj/Ovation/dd/train.txt','TT')
 
 #analyze_data('/home/scstech/WORK/ovation_proj/Ovation/utils/T/train.sqlite')
 
