@@ -53,4 +53,4 @@ def compute(path,target_dir,n_p = 5, lang='en'):
         print(i, i+dim)
 
 
-compute('/home/scstech/WORK/ovation_proj/Ovation/train.txt','hotel2')
+compute('/scratch/OSA/data/datasets/hotel_reviews/train/train.txt','hotel_statistics_2',lang='en')
