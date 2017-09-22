@@ -68,7 +68,7 @@ tf.flags.DEFINE_string("data_dir", "/scratch", "path to the root of the data "
 tf.flags.DEFINE_string("experiment_name",
                        "AMAZON_SENTIMENT_CNN_LSTM_REGRESSION",
                        "Name of your model")
-tf.flags.DEFINE_string("mode", "train", "'train' or 'test or results, INFER'")
+tf.flags.DEFINE_string("mode", "train", "'train' or 'test or results, infer_server, infer'")
 tf.flags.DEFINE_string("dataset", "amazon_de", "'The sentiment analysis "
                            "dataset that you want to use. Available options "
                            "are amazon_de and hotel_reviews")
@@ -216,6 +216,64 @@ def evaluate(sess, dataset, model, step, max_dev_itr=100, verbose=True,
     return avg_loss, avg_pco, result_set
 
 
+def infer_block(sess, dataset, model, step, max_dev_itr=100, verbose=True,
+             mode='val'):
+    results_dir = model.val_results_dir if mode == 'val' \
+        else model.test_results_dir
+    samples_path = os.path.join(results_dir,'attention',
+                                '{}_samples_{}.txt'.format(mode, step))
+    history_path = os.path.join(results_dir,'attention',
+                                '{}_history.txt'.format(mode))
+
+
+    print("Running Evaluation {}:".format(mode))
+    tflearn.is_training(False, session=sess)
+
+    # This is needed to reset the local variables initialized by
+    # TF for calculating streaming Pearson Correlation and MSE
+    sess.run(tf.local_variables_initializer())
+    all_dev_review, all_dev_score, all_dev_gt, all_dev_attention = [], [], [], []
+    dev_itr = 0
+
+    val_batch = dataset.next_batch(FLAGS.batch_size, rescale=[0.0, 1.0],
+                                   pad=model.args["sequence_length"])
+    results = model.infer(sess, val_batch.text, val_batch.lengths)
+    all_dev_review.append(id2seq(val_batch.text, dataset.vocab_i2w))
+    all_dev_score.append(results[0])
+    all_dev_attention.append(np.transpose(np.array(results[1]), axes=[1,0,2]))
+    all_dev_gt.append(val_batch.ratings)
+    dev_itr += 1
+
+    result_set = (all_dev_review, all_dev_score, all_dev_attention, all_dev_gt)
+    np.save(samples_path.split('.')[0]+'_review.npy', all_dev_review)
+    np.save(samples_path.split('.')[0]+'_score.npy', all_dev_score)
+    np.save(samples_path.split('.')[0]+'_attention.npy', all_dev_attention)
+    np.save(samples_path.split('.')[0]+'_gt.npy', all_dev_gt)
+    with open(samples_path, 'w') as sf:
+        for txt, similarity, att_big, gt_rating in zip(all_dev_review, all_dev_score,all_dev_attention, all_dev_gt):
+            for x1, sim, att, gt in zip(txt, similarity, att_big, gt_rating):
+
+                sf.write('{}\t{}\t{}\n'.format(x1, sim,
+                               [item/np.sum(item) * 100 for item in np.array(att)[:,:len(x1.split(' '))]],gt ))
+    tflearn.is_training(True, session=sess)
+    return
+
+def infer(dataset, metadata_path, w2v, rescale=None):
+    print('Configuring Tensorflow Graph')
+    with tf.Graph().as_default():
+        sess, model = initialize_tf_graph(metadata_path, w2v)
+        dataset.test.open()
+        infer_block(sess=sess,
+                    dataset=dataset.test,
+                    model=model,
+                    max_dev_itr=1,
+                    mode='test',
+                    step=-1)
+        dataset.test.close()
+        print('Done writing results')
+    return
+
+
 def test(dataset, metadata_path, w2v, rescale=None):
     print("Configuring Tensorflow Graph")
     with tf.Graph().as_default():
@@ -328,7 +386,8 @@ def get_sentiment(input_str):
     text = datasets.seq2id(tokenized_input, ds.w2i)
     text = datasets.padseq(text, pad=150)
     results = spr_model.infer(sess, text, length)
-    return results[0], results[1], length
+    merged_tokens = ' '.join(tokenized_text)
+    return results[0], results[1], length, tokenized_text, merged_tokens
 
 
 def process_post_request(request):
@@ -337,11 +396,13 @@ def process_post_request(request):
     text = content['input']
     print('input text: '.format(text))
     response = {}
-    sentiment, attention, length = get_sentiment(text)
+    sentiment, attention, length, tokenized_text, merged_tokens = get_sentiment(text)
     response['score'] = str(sentiment[0])
     response['reason'] = 'some reason'
     attention = [item/np.sum(item)*100 for item in np.array(attention)[:,0,:length[0]]]
     response['attention'] = [[str(i)for i in item] for item in attention]
+    response['parsed_text'] = merged_tokens
+    response['tokens'] = tokenized_text
     return response
 
 
@@ -377,7 +438,8 @@ if __name__ == '__main__':
         test(ds, ds.metadata_path, ds.w2v)
     elif FLAGS.mode == 'results':
         results(ds, ds.metadata_path, ds.w2v)
-    elif FLAGS.mode == 'infer':
+    elif FLAGS.mode == 'infer_server':
         train(ds, ds.metadata_path, ds.w2v, getout=True)
-
         start_server(FLAGS.port)
+    elif FLAGS.mode == 'infer':
+        infer(ds, ds.metadata_path, ds.w2v)
