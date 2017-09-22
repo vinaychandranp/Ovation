@@ -381,7 +381,7 @@ def get_sentiment(input_str):
     global ds
     global spr_model
     global sess
-    tokenized_text = datasets.tokenize(input_str, lang='de')
+    tokenized_text = datasets.tokenize(input_str, lang=FLAGS.lang)
     length = [len(tokenized_text)] * 128
     tokenized_input = [tokenized_text] * 128
     text = datasets.seq2id(tokenized_input, ds.w2i)

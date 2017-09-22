@@ -2,6 +2,7 @@ import os
 import datetime
 import datasets
 import tflearn
+import json
 
 import numpy as np
 import tensorflow as tf
@@ -15,6 +16,10 @@ from datasets import HotelReviews
 from datasets import id2seq
 from pyqt_fit import npr_methods
 from models import SentimentMultitaskRegressor
+from flask_cors import CORS, cross_origin
+from flask import Flask
+from flask import request
+from flask import Response
 
 # Model Parameters
 tf.flags.DEFINE_integer("embedding_dim", 300, "Dimensionality of character "
@@ -67,13 +72,17 @@ tf.flags.DEFINE_string("mode", "train", "'train' or 'test or results'")
 tf.flags.DEFINE_string("dataset", "amazon_de", "'The sentiment analysis "
                            "dataset that you want to use. Available options "
                            "are amazon_de and hotel_reviews")
+tf.flags.DEFINE_string("lang", "en", "language of choice")
+tf.flags.DEFINE_string("port", "8080", "Port number")
 
 
 FLAGS = tf.flags.FLAGS
 FLAGS._parse_flags()
-
+sess, spr_model = None, None
 
 def initialize_tf_graph(metadata_path, w2v):
+    global sess
+    global spr_model
     config = tf.ConfigProto(
         allow_soft_placement=FLAGS.allow_soft_placement,
         log_device_placement=FLAGS.log_device_placement)
@@ -95,12 +104,14 @@ def initialize_tf_graph(metadata_path, w2v):
     return sess, spr_model
 
 
-def train(dataset, metadata_path, w2v):
+def train(dataset, metadata_path, w2v, getout=False):
     print("Configuring Tensorflow Graph")
     with tf.Graph().as_default():
 
         sess, spr_model = initialize_tf_graph(metadata_path, w2v)
-
+        if getout:
+            tflearn.is_training(False, session=sess)
+            return
         print('Opening the datasets')
         dataset.train.open()
         dataset.validation.open()
@@ -305,8 +316,59 @@ def non_parametric_regression(xs, ys, method):
     reg.fit()
     return reg
 
-if __name__ == '__main__':
+class_mappings = {0: 'service', 1: 'cleanliness',
+                  2: 'value', 3: 'sleep quality',
+                  4: 'rooms'}
 
+def get_sentiment(input_str):
+    global ds
+    global spr_model
+    global sess
+    tokenized_text = datasets.tokenize(input_str, lang=FLAGS.lang)
+    tokenized_input = [tokenized_text]
+    text = datasets.seq2id(tokenized_input, ds.w2i)
+    text = datasets.padseq(text, pad=150)
+    sentiment, reasons = spr_model.infer(sess, text)
+    reason = np.argmax(reasons)
+    reason_str = class_mappings[reason]
+    return sentiment, reason_str, reasons
+
+
+def process_post_request(request):
+    # TODO: add sanity checks for the request before moving on
+    content = request.get_json()
+    text = content['input']
+    print('input text: {}'.format(text))
+    response = {}
+    sentiment, reason_str, reasons = get_sentiment(text)
+    response['score'] = str(sentiment)
+    response['reason'] = reason_str
+    response['service'] = str(reasons[0])
+    response['cleanliness'] = str(reasons[1])
+    response['value'] = str(reasons[2])
+    response['sleep_quality'] = str(reasons[3])
+    response['rooms'] = str(reasons[4])
+    return response
+
+
+def start_server(port):
+    app = Flask(__name__)
+    cors = CORS(app)
+    app.config['CORS_HEADERS'] = 'Content-Type'
+    @app.route('/generateSentiment/{}'.format(FLAGS.lang), methods=['POST'])
+    @cross_origin()
+    def sentiment():
+        response = process_post_request(request)
+        r = Response(response=json.dumps(response),
+                     status=200, mimetype="application/json",
+                     content_type='application/json')
+        r.headers["Content-Type"] = "text/plain; charset=utf-8"
+        r.encoding = 'utf8'
+        return r
+    app.run(host='0.0.0.0', port=port)
+
+
+if __name__ == '__main__':
     ds = None
     if FLAGS.dataset == 'amazon_de':
         print('Using the Amazon Reviews DE dataset')
@@ -323,3 +385,6 @@ if __name__ == '__main__':
         test(ds, ds.metadata_path, ds.w2v)
     elif FLAGS.mode == 'results':
         results(ds, ds.metadata_path, ds.w2v)
+    elif FLAGS.mode == 'infer':
+        train(ds, ds.metadata_path, ds.w2v, getout=True)
+        start_server(FLAGS.port)
