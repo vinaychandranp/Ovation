@@ -18,6 +18,7 @@ from datasets import HotelReviews
 from datasets import id2seq
 from pyqt_fit import npr_methods
 from models import HeirarchicalAttentionSentimentRegressor
+from flask_cors import CORS, cross_origin
 
 # Model Parameters
 tf.flags.DEFINE_integer("embedding_dim", 300, "Dimensionality of character "
@@ -433,7 +434,10 @@ def process_post_request(request):
 
 def start_server(port):
     app = Flask(__name__)
+    cors = CORS(app)
+    app.config['CORS_HEADERS'] = 'Content-Type'
     @app.route('/generateSentiment/{}'.format(FLAGS.lang), methods=['POST'])
+    @cross_origin()
     def sentiment():
         response = process_post_request(request)
         r = Response(response=json.dumps(response),
