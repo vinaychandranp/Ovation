@@ -3,7 +3,8 @@ import datetime
 import datasets
 import tflearn
 import json
-
+import matplotlib
+matplotlib.use('Agg')
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -19,6 +20,10 @@ from datasets import id2seq
 from pyqt_fit import npr_methods
 from models import HeirarchicalAttentionSentimentRegressor
 from flask_cors import CORS, cross_origin
+from tools.create_attention_graph import plot_attention
+# from PIL import Image
+import base64
+
 
 # Model Parameters
 tf.flags.DEFINE_integer("embedding_dim", 300, "Dimensionality of character "
@@ -404,19 +409,19 @@ def process_post_request(request):
     response['attention'] = [[str(i)for i in item] for item in attention]
     response['parsed_text'] = merged_tokens
     response['tokens'] = tokenized_text
-    attn_ids_sorted = [sorted(range(len(attn)), key=lambda k: attn[k]).reverse() for attn in attention]
+    attn_ids_sorted = [np.argsort(attn)[::-1] for attn in attention]
     locations = []
     hop_sampled_toks = []
     for attn_ids in attn_ids_sorted:
         num = int(len(attn_ids)*0.3)
         imp_tok_ids = attn_ids[: num]
-        sampled_tokens = [tokenized_text[id] for id in attn_ids]
+        sampled_tokens = [tokenized_text[id] for id in imp_tok_ids]
         location = []
         start, end = 0, 0
         for t_i, tok in enumerate(tokenized_text):
             if t_i in imp_tok_ids:
                 end += len(tok) - 1
-                location.append([str(start), str(end)])
+                location.append([start, end])
                 end += 1
                 start += len(tok)
             else:
@@ -430,6 +435,14 @@ def process_post_request(request):
         hop_sampled_toks.append(sampled_tokens)
     response['sample_tokens'] = hop_sampled_toks
     response['locations'] = locations
+    try:
+        plot_attention(tokenized_text, attention, length[0]).savefig('/tmp/tmp.png')
+        # img = Image.open('/tmp/tmp.png')
+        with open('/tmp/tmp.png','rb') as f:
+            response['graph'] = base64.b64encode(f.read()).decode('utf-8')
+    except:
+        print("Graph not generated!")
+        response['graph'] = 'Graph not generated!'
     return response
 
 
