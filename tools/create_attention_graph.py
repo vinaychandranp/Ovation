@@ -26,8 +26,8 @@ from matplotlib import colors
 
 def plot_attention(review, attention, length):
     fig, ax = plt.subplots(figsize=(10,5))
-    heatmap = ax.pcolor(attention[:,:-1,:length], cmap=plt.cm.Blues, alpha=0.9)
-    X_label = review[id].split(' ')
+    heatmap = ax.pcolor(np.array(attention)[::-1,:], cmap=plt.cm.Blues, alpha=0.9)
+    X_label = review
     xticks = range(0,len(X_label))
     ax.set_xticks(xticks, minor=False) # major ticks
     ax.set_xticklabels(X_label, minor = False, rotation=45)   # labels should be 'unicode'

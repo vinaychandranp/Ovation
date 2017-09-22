@@ -3,7 +3,8 @@ import datetime
 import datasets
 import tflearn
 import json
-
+import matplotlib
+matplotlib.use('Agg')
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -20,6 +21,9 @@ from pyqt_fit import npr_methods
 from models import HeirarchicalAttentionSentimentRegressor
 from flask_cors import CORS, cross_origin
 from tools.create_attention_graph import plot_attention
+# from PIL import Image
+import base64
+
 
 # Model Parameters
 tf.flags.DEFINE_integer("embedding_dim", 300, "Dimensionality of character "
@@ -417,15 +421,9 @@ def process_post_request(request):
         for t_i, tok in enumerate(tokenized_text):
             if t_i in imp_tok_ids:
                 end += len(tok) - 1
-<<<<<<< HEAD
                 location.append([start, end])
-                end += 2
-                start += len(tok) + 1
-=======
-                location.append([str(start), str(end)])
                 end += 1
                 start += len(tok)
->>>>>>> 10aadeffc4a7cb667396db313172ac2ae5335cf4
             else:
                 if t_i < len(tokenized_text) - 1:
                     start += len(tok)
@@ -437,7 +435,14 @@ def process_post_request(request):
         hop_sampled_toks.append(sampled_tokens)
     response['sample_tokens'] = hop_sampled_toks
     response['locations'] = locations
-    response['graph'] = plot_attention(tokenized_text, attention, length)
+    try:
+        plot_attention(tokenized_text, attention, length[0]).savefig('/tmp/tmp.png')
+        # img = Image.open('/tmp/tmp.png')
+        with open('/tmp/tmp.png','rb') as f:
+            response['graph'] = base64.b64encode(f.read()).decode('utf-8')
+    except:
+        print("Graph not generated!")
+        response['graph'] = 'Graph not generated!'
     return response
 
 
