@@ -225,7 +225,7 @@ def test(dataset, metadata_path, w2v, rescale=None):
                                   original_range=[0.0, 1.0])
 
         figure_path = os.path.join(siamese_model.exp_dir,
-                                   'test_no_regression_sim.jpg')
+                                   'test_no_regression_sim.pdf')
         plt.ylabel('Ground Truth Similarities')
         plt.xlabel('Predicted  Similarities')
         plt.scatter(ratings, gt, label="Similarity", s=0.2)
