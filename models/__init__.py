@@ -7,3 +7,4 @@ from .ner_seq2seq import AcnerSeq2Seq
 from .model import Model
 from .heirarchical_attention_sentiment_regressor import HeirarchicalAttentionSentimentRegressor
 from .sentiment_regressor_sentences import SentimentRegressorSentence
+from .sentiment_multitask_regressor import SentimentMultitaskRegressor
