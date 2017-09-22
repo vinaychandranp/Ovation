@@ -19,6 +19,7 @@ from datasets import id2seq
 from pyqt_fit import npr_methods
 from models import HeirarchicalAttentionSentimentRegressor
 from flask_cors import CORS, cross_origin
+from tools.create_attention_graph import plot_attention
 
 # Model Parameters
 tf.flags.DEFINE_integer("embedding_dim", 300, "Dimensionality of character "
@@ -415,9 +416,10 @@ def process_post_request(request):
         start, end = 0, 0
         for t_i, tok in enumerate(tokenized_text):
             if t_i in imp_tok_ids:
-                end += len(tok)
-                location.append([str(start), str(end)])
-                start += len(tok)
+                end += len(tok) - 1
+                location.append([start, end])
+                end += 2
+                start += len(tok) + 1
             else:
                 if t_i < len(tokenized_text)-1:
                     start += len(tok)+1
@@ -429,6 +431,7 @@ def process_post_request(request):
         hop_sampled_toks.append(sampled_tokens)
     response['sample_tokens'] = hop_sampled_toks
     response['locations'] = locations
+    response['graph'] = plot_attention(tokenized_text, attention, length)
     return response
 
 
