@@ -417,16 +417,22 @@ def process_post_request(request):
         for t_i, tok in enumerate(tokenized_text):
             if t_i in imp_tok_ids:
                 end += len(tok) - 1
+<<<<<<< HEAD
                 location.append([start, end])
                 end += 2
                 start += len(tok) + 1
+=======
+                location.append([str(start), str(end)])
+                end += 1
+                start += len(tok)
+>>>>>>> 10aadeffc4a7cb667396db313172ac2ae5335cf4
             else:
-                if t_i < len(tokenized_text)-1:
-                    start += len(tok)+1
-                    end += len(tok)+1
-                else:
+                if t_i < len(tokenized_text) - 1:
                     start += len(tok)
                     end += len(tok)
+                else:
+                    start += len(tok) - 1
+                    end += len(tok) - 1
         locations.append(location)
         hop_sampled_toks.append(sampled_tokens)
     response['sample_tokens'] = hop_sampled_toks
@@ -453,7 +459,6 @@ def start_server(port):
 
 
 if __name__ == '__main__':
-
     ds = None
     if FLAGS.dataset == 'amazon_de':
         print('Using the Amazon Reviews DE dataset')
