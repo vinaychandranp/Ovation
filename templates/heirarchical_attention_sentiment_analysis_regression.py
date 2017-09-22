@@ -403,13 +403,13 @@ def process_post_request(request):
     response['attention'] = [[str(i)for i in item] for item in attention]
     response['parsed_text'] = merged_tokens
     response['tokens'] = tokenized_text
-    attn_ids_sorted = [sorted(range(len(attn)), key=lambda k: attn[k]).reverse() for attn in attention]
+    attn_ids_sorted = [np.argsort(attn)[::-1] for attn in attention]
     locations = []
     hop_sampled_toks = []
     for attn_ids in attn_ids_sorted:
         num = int(len(attn_ids)*0.3)
         imp_tok_ids = attn_ids[: num]
-        sampled_tokens = [tokenized_text[id] for id in attn_ids]
+        sampled_tokens = [tokenized_text[id] for id in imp_tok_ids]
         location = []
         start, end = 0, 0
         for t_i, tok in enumerate(tokenized_text):
