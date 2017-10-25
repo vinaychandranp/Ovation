@@ -405,7 +405,7 @@ def process_post_request(request):
     sentiment, attention, length, tokenized_text, merged_tokens = get_sentiment(text)
     response['score'] = str(sentiment[0])
     response['reason'] = 'some reason'
-    attention = [item/np.sum(item)*100 for item in np.array(attention)[:,0,:length[0]]]
+    attention = [item/np.sum(item) for item in np.array(attention)[:,0,:length[0]]]
     response['attention'] = [[str(i)for i in item] for item in attention]
     response['parsed_text'] = merged_tokens
     response['tokens'] = tokenized_text
@@ -413,11 +413,12 @@ def process_post_request(request):
     locations = []
     hop_sampled_toks = []
     for attn_ids in attn_ids_sorted:
-        num = int(len(attn_ids)*0.3)
+        num = int(len(attn_ids)*0.5)
         imp_tok_ids = attn_ids[: num]
-        sampled_tokens = [tokenized_text[id] for id in imp_tok_ids]
+        sampled_tokens = [[tokenized_text[id], str(id)] for id in imp_tok_ids]
         location = []
         start, end = 0, 0
+        """
         for t_i, tok in enumerate(tokenized_text):
             if t_i in imp_tok_ids:
                 end += len(tok) - 1
@@ -432,9 +433,11 @@ def process_post_request(request):
                     start += len(tok) - 1
                     end += len(tok) - 1
         locations.append(location)
+        """
         hop_sampled_toks.append(sampled_tokens)
     response['sample_tokens'] = hop_sampled_toks
-    response['locations'] = locations
+    #response['locations'] = locations
+    """
     try:
         plot_attention(tokenized_text, attention, length[0]).savefig('/tmp/tmp.png')
         # img = Image.open('/tmp/tmp.png')
@@ -443,6 +446,7 @@ def process_post_request(request):
     except:
         print("Graph not generated!")
         response['graph'] = 'Graph not generated!'
+    """
     return response
 
 

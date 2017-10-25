@@ -12,6 +12,7 @@ from flask import Response
 from datasets import AmazonReviewsGerman
 from datasets import HotelReviews
 from models import SentenceSentimentRegressor
+from flask_cors import CORS, cross_origin
 
 # Model Parameters
 tf.flags.DEFINE_integer("embedding_dim", 300, "Dimensionality of character "
@@ -131,6 +132,8 @@ def process_post_request(request):
 
 def start_server(port):
     app = Flask(__name__)
+    cors = CORS(app)
+    app.config['CORS_HEADERS'] = 'Content-Type'
     @app.route('/generateSentiment/{}'.format(FLAGS.lang), methods=['POST'])
     def sentiment():
         response = process_post_request(request)
