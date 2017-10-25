@@ -1,11 +1,14 @@
 import os
+import random
 import datasets
 import collections
 
+import numpy as np
 
 class STS(object):
     def __init__(self, train_validation_split=None, test_split=None,
-                 use_defaults=True, subset='sts_small'):
+                 use_defaults=True, subset='sts_small', chars=True):
+        suffix = '_chars' if chars else ''
         if train_validation_split is not None or test_split is not None or \
                 use_defaults is False:
             raise NotImplementedError('This Dataset does not implement '
@@ -18,6 +21,7 @@ class STS(object):
                'datasets. \n It has 258537 Training sentence pairs, 133102 ' \
                'Test sentence pairs and 59058 validation sentence pairs.'
         self.test_split = 'large'
+        self.chars = chars
         self.dataset = subset
         self.dataset_path = os.path.join(datasets.data_root_directory,
                                          self.dataset)
@@ -25,18 +29,21 @@ class STS(object):
         self.validation_path = os.path.join(self.dataset_path, 'validation',
                                             'validation.txt')
         self.test_path = os.path.join(self.dataset_path, 'test', 'test.txt')
-        self.vocab_path = os.path.join(self.dataset_path, 'vocab.txt')
+        self.vocab_path = os.path.join(self.dataset_path, 'vocab{}.txt'.format(suffix))
         self.metadata_path = os.path.abspath(os.path.join(self.dataset_path,
-                                               'metadata.txt'))
-        self.w2v_path = os.path.join(self.dataset_path, 'w2v.npy')
+                                               'metadata{}.txt'.format(suffix)))
+        self.w2v_path = os.path.join(self.dataset_path, 'w2v{}.npy'.format(suffix))
 
         self.w2i, self.i2w = datasets.load_vocabulary(self.vocab_path)
-        self.w2v = datasets.load_w2v(self.w2v_path)
+        if os.path.exists(self.w2v_path):
+            self.w2v = datasets.load_w2v(self.w2v_path)
+        else:
+            self.w2v = np.random.rand(len(self.w2i) , 300)
 
         self.vocab_size = len(self.w2i)
-        self.train = DataSet(self.train_path, (self.w2i, self.i2w))
-        self.validation = DataSet(self.validation_path, (self.w2i, self.i2w))
-        self.test = DataSet(self.test_path, (self.w2i, self.i2w))
+        self.train = DataSet(self.train_path, (self.w2i, self.i2w), chars)
+        self.validation = DataSet(self.validation_path, (self.w2i, self.i2w), chars)
+        self.test = DataSet(self.test_path, (self.w2i, self.i2w), chars)
         self.__refresh(load_w2v=False)
 
     def create_vocabulary(self, min_frequency=5, tokenizer='spacy',
@@ -60,15 +67,16 @@ class STS(object):
 
 
 class DataSet(object):
-    def __init__(self, path, vocab):
+    def __init__(self, path, vocab, chars=False):
 
         self.path = path
         self._epochs_completed = 0
         self.vocab_w2i = vocab[0]
         self.vocab_i2w = vocab[1]
         self.datafile = None
+        self.chars = chars
 
-        self.Batch = collections.namedtuple('Batch', ['s1', 's2', 'sim'])
+        self.Batch = collections.namedtuple('Batch', ['s1', 's2', 's3', 'sim'])
 
     def open(self):
         self.datafile = open(self.path, 'r')
@@ -91,7 +99,74 @@ class DataSet(object):
         return data_
 
     def next_batch(self, batch_size=64, seq_begin=False, seq_end=False,
-                   rescale=(0.0, 1.0), pad=0, raw=False, keep_entities=False):
+                   rescale=(0.0, 1.0), pad=0, raw=False, keep_entities=False,
+                   negative_sampling=False):
+        if not self.datafile:
+            raise Exception('The dataset needs to be open before being used. '
+                            'Please call dataset.open() before calling '
+                            'dataset.next_batch()')
+        if negative_sampling:
+            batch = self.negative_sampling(batch_size, seq_begin, seq_end,
+                   rescale, pad, raw, keep_entities)
+        else:
+            batch = self.standard_sampling(batch_size, seq_begin, seq_end,
+                                           rescale, pad, raw, keep_entities)
+        return batch
+
+    def negative_sampling(self, rescale, batch_size, keep_entities, raw, seq_begin, seq_end, pad):
+        datasets.validate_rescale(rescale)
+
+        s1s, s2s, s3s, buff, sims = [], [], [], [], []
+
+        while len(s1s) < batch_size:
+            row = self.datafile.readline()
+            if row == '':
+                self._epochs_completed += 1
+                self.datafile.seek(0)
+                continue
+            cols = row.strip().split('\t')
+            s1, s2, sim = cols[0], cols[1], float(cols[2])
+            s1 = s1.split(' ') if not self.chars else list(s1)
+            s2 = s2.split(' ') if not self.chars else list(s2)
+            if sim >= 0.7:
+                s1s.append(s1)
+                s2s.append(s2)
+                sims.append(sim)
+                buff += [s1, s2]
+            else:
+                buff += [s1, s2]
+
+        random.shuffle(buff)
+        s3s = random.sample(buff, batch_size)
+        if not keep_entities and (not self.chars):
+            s1s = self.remove_entities(s1s)
+            s2s = self.remove_entities(s2s)
+            s3s = self.remove_entities(s3s)
+
+        if not raw:
+            s1s = datasets.seq2id(s1s[:batch_size], self.vocab_w2i, seq_begin,
+                                  seq_end)
+            s2s = datasets.seq2id(s2s[:batch_size], self.vocab_w2i, seq_begin,
+                                  seq_end)
+            s3s = datasets.seq2id(s3s[:batch_size], self.vocab_w2i, seq_begin,
+                                  seq_end)
+        else:
+            s1s = datasets.append_seq_markers(s1s[:batch_size], seq_begin, seq_end)
+            s2s = datasets.append_seq_markers(s2s[:batch_size], seq_begin, seq_end)
+            s3s = datasets.append_seq_markers(s3s[:batch_size], seq_begin, seq_end)
+        if pad != 0:
+            s1s = datasets.padseq(s1s, pad, raw)
+            s2s = datasets.padseq(s2s, pad, raw)
+            s3s = datasets.padseq(s3s, pad, raw)
+        batch = self.Batch(
+            s1=s1s,
+            s2=s2s,
+            s3=s3s,
+            sim=datasets.rescale(sims[:batch_size], rescale, (0.0, 1.0)))
+
+        return batch
+
+    def standard_sampling(self, rescale, batch_size, keep_entities, raw, seq_begin, seq_end, pad):
         if not self.datafile:
             raise Exception('The dataset needs to be open before being used. '
                             'Please call dataset.open() before calling '
@@ -132,6 +207,7 @@ class DataSet(object):
             s1=s1s,
             s2=s2s,
             sim=datasets.rescale(sims[:batch_size], rescale, (0.0, 1.0)))
+
         return batch
 
     def set_vocab(self, vocab):

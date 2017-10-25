@@ -1,5 +1,3 @@
-import os
-import pickle
 import datetime
 
 import tensorflow as tf
@@ -8,12 +6,13 @@ from utils import ops
 from utils import distances
 from utils import losses
 from scipy.stats import pearsonr
+from tflearn.layers.core import dropout
 from sklearn.metrics import mean_squared_error
 from tensorflow.contrib.tensorboard.plugins import projector
 
 from models.model import Model
 
-class SiameseCNNLSTM(Model):
+class CNNLSTMMargin(Model):
     """
     A LSTM based deep Siamese network for text similarity.
     Uses a word embedding layer, followed by a bLSTM and a simple Energy Loss
@@ -35,6 +34,10 @@ class SiameseCNNLSTM(Model):
         self.input_s2 = tf.placeholder(tf.int32, [None,
                                               self.args.get("sequence_length")],
                                        name="input_s2")
+
+        self.input_s3 = tf.placeholder(tf.int32, [None,
+                                                  self.args.get("sequence_length")],
+                                       name="input_s3")
 
         # This is a placeholder to feed in the ground truth similarity
         # between the two sentences. It expects a Matrix of shape [BATCH_SIZE]
@@ -65,6 +68,9 @@ class SiameseCNNLSTM(Model):
         self.embedded_s2 = tf.nn.embedding_lookup(self.embedding_weights,
                                                       self.input_s2)
 
+        self.embedded_s3 = tf.nn.embedding_lookup(self.embedding_weights,
+                                                  self.input_s3)
+
         
         self.s1_cnn_out = ops.multi_filter_conv_block(self.embedded_s1,
                                 self.args["n_filters"],
@@ -85,25 +91,31 @@ class SiameseCNNLSTM(Model):
                                    layers=self.args["rnn_layers"],
                                    dynamic=False, reuse=True,
                                    bidirectional=self.args["bidirectional"])
-        self.distance = distances.exponential(self.s1_lstm_out,
-                                              self.s2_lstm_out)
+
+        self.s3_cnn_out = ops.multi_filter_conv_block(self.embedded_s3,
+                                                      self.args["n_filters"], reuse=True,
+                                                      dropout_keep_prob=self.args["dropout"])
+        self.s3_lstm_out = ops.lstm_block(self.s3_cnn_out,
+                                          self.args["hidden_units"],
+                                          dropout=self.args["dropout"],
+                                          layers=self.args["rnn_layers"],
+                                          dynamic=False, reuse=True,
+                                          bidirectional=self.args["bidirectional"])
+
+        s1_drop = dropout(self.s1_lstm_out, 0.2)
+        s2_drop = dropout(self.s2_lstm_out, 0.2)
+        s3_drop = dropout(self.s3_lstm_out, 0.2)
+
+        self.good_sim = distances.gesd(s1_drop, s2_drop)
+        self.bad_sim = distances.gesd(s1_drop, s3_drop)
     
         with tf.name_scope("loss"):
-            self.loss = losses.mean_squared_error(self.input_sim, self.distance)
+            self.loss = losses.margin_loss(self.good_sim, self.bad_sim)
 
             if self.args["l2_reg_beta"] > 0.0:
                 self.regularizer = ops.get_regularizer(self.args["l2_reg_beta"])
                 self.loss = tf.reduce_mean(self.loss + self.regularizer)
 
-        # Compute some Evaluation Measures to keep track of the training process
-        with tf.name_scope("Pearson_correlation"):
-            self.pco, self.pco_update = tf.contrib.metrics.streaming_pearson_correlation(
-                    self.distance, self.input_sim, name="pearson")
-
-        # Compute some Evaluation Measures to keep track of the training process
-        with tf.name_scope("MSE"):
-            self.mse, self.mse_update = tf.metrics.mean_squared_error(
-                    self.input_sim, self.distance,  name="mse")
 
     def create_scalar_summary(self, sess):
         """
@@ -114,12 +126,10 @@ class SiameseCNNLSTM(Model):
         """
         # Summaries for loss and accuracy
         self.loss_summary = tf.summary.scalar("loss", self.loss)
-        self.pearson_summary = tf.summary.scalar("pco", self.pco)
         self.mse_summary = tf.summary.scalar("mse", self.mse)
 
         # Train Summaries
         self.train_summary_op = tf.summary.merge([self.loss_summary,
-                                                  self.pearson_summary,
                                                   self.mse_summary])
 
         self.train_summary_writer = tf.summary.FileWriter(self.checkpoint_dir,
@@ -129,13 +139,12 @@ class SiameseCNNLSTM(Model):
 
         # Dev summaries
         self.dev_summary_op = tf.summary.merge([self.loss_summary,
-                                                self.pearson_summary,
                                                 self.mse_summary])
 
         self.dev_summary_writer = tf.summary.FileWriter(self.dev_summary_dir,
                                                    sess.graph)
 
-    def train_step(self, sess, s1_batch, s2_batch, sim_batch,
+    def train_step(self, sess, s1_batch, s2_batch, s3_batch, sim_batch,
                    epochs_completed, verbose=True):
             """
             A single train step
@@ -149,29 +158,24 @@ class SiameseCNNLSTM(Model):
             }
 
             # create a list of operations that you want to run and observe
-            ops = [self.tr_op_set, self.global_step, self.loss, self.distance]
+            ops = [self.tr_op_set, self.global_step, self.loss, self.good_sim, self.bad_sim]
 
             # Add summaries if they exist
             if hasattr(self, 'train_summary_op'):
                 ops.append(self.train_summary_op)
-                _, step, loss, sim, summaries = sess.run(ops,
+                _, step, loss, good_sim, bad_sim, summaries = sess.run(ops,
                     feed_dict)
                 self.train_summary_writer.add_summary(summaries, step)
             else:
-                _, step, loss, sim = sess.run(ops, feed_dict)
-
-            # Calculate the pearson correlation and mean squared error
-            pco = pearsonr(sim, sim_batch)
-            mse = mean_squared_error(sim_batch, sim)
+                _, step, loss, good_sim, bad_sim = sess.run(ops, feed_dict)
 
             if verbose:
                 time_str = datetime.datetime.now().isoformat()
-                print("Epoch: {}\tTRAIN {}: Current Step{}\tLoss{:g}\t"
-                      "PCO:{}\tMSE={}".format(epochs_completed,
-                        time_str, step, loss, pco, mse))
-            return pco, mse, loss, step
+                print("Epoch: {}\tTRAIN {}: Current Step{}\tLoss{:g}".format(epochs_completed,
+                        time_str, step, loss))
+            return loss, step, good_sim, bad_sim
 
-    def evaluate_step(self, sess, s1_batch, s2_batch, sim_batch, verbose=True):
+    def evaluate_step(self, sess, s1_batch, s2_batch, s3_batch, sim_batch, verbose=True):
         """
         A single evaluation step
         """
@@ -184,25 +188,21 @@ class SiameseCNNLSTM(Model):
         }
 
         # create a list of operations that you want to run and observe
-        ops = [self.global_step, self.loss, self.distance, self.pco,
-               self.pco_update, self.mse, self.mse_update]
+        ops = [self.global_step, self.loss, self.good_sim, self.bad_sim]
 
         # Add summaries if they exist
         if hasattr(self, 'dev_summary_op'):
             ops.append(self.dev_summary_op)
-            step, loss, sim, pco, _, mse, _, summaries = sess.run(ops,
+            step, loss, good_sim, bad_sim, summaries = sess.run(ops,
                                                                   feed_dict)
             self.dev_summary_writer.add_summary(summaries, step)
         else:
-            step, loss, sim, pco, _, mse, _ = sess.run(ops, feed_dict)
+            step, loss, good_sim, bad_sim = sess.run(ops, feed_dict)
 
         time_str = datetime.datetime.now().isoformat()
 
-        # Calculate the pearson correlation and mean squared error
-        pco = pearsonr(sim, sim_batch)
-        mse = mean_squared_error(sim_batch, sim)
         if verbose:
-            print("EVAL: {}\tStep: {}\tloss: {:g}\t pco:{}\tmse:{}".format(
-                    time_str, step, loss, pco, mse))
-        return loss, pco, mse, sim
+            print("EVAL: {}\tStep: {}\tloss: {:g}".format(
+                    time_str, step, loss))
+        return loss, good_sim, bad_sim
 
