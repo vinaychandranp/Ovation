@@ -191,7 +191,11 @@ class SentimentMultitaskRegressor(Model):
         feed_dict = {
             self.input: text
         }
-        ops = [self.out]
-        sentiment = sess.run(ops, feed_dict)
+        ops = [self.out, self.out_ratings_service, self.out_ratings_cleanliness, self.out_ratings_value,
+               self.out_ratings_sleep_quality,
+               self.out_ratings_rooms]
+        sentiment, out_ratings_service, out_ratings_cleanliness,\
+                out_ratings_value, out_ratings_sleep_quality, out_ratings_rooms = sess.run(ops, feed_dict)
 
-        return sentiment
+        return sentiment, [out_ratings_service, out_ratings_cleanliness,\
+                out_ratings_value, out_ratings_sleep_quality, out_ratings_rooms]
