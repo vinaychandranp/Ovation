@@ -30,6 +30,7 @@ def margin_loss(vec_1, vec_2, margin=0.05):
     :param margin:
     :return: loss
     '''
-
-    return tf.nn.relu(margin - vec_1 + vec_2)
+    loss = tf.maximum(0., margin - vec_1 + vec_2)
+    loss = tf.reduce_mean(loss)
+    return loss
 

@@ -1,4 +1,5 @@
 import os
+import pickle
 import random
 import datasets
 import collections
@@ -7,8 +8,8 @@ import numpy as np
 
 class STS(object):
     def __init__(self, train_validation_split=None, test_split=None,
-                 use_defaults=True, subset='sts_small', chars=True):
-        suffix = '_chars' if chars else ''
+                 use_defaults=True, subset='sts_small', mode='word',
+                 load_w2v=True, lang='en', threshold=0.5):
         if train_validation_split is not None or test_split is not None or \
                 use_defaults is False:
             raise NotImplementedError('This Dataset does not implement '
@@ -21,7 +22,9 @@ class STS(object):
                'datasets. \n It has 258537 Training sentence pairs, 133102 ' \
                'Test sentence pairs and 59058 validation sentence pairs.'
         self.test_split = 'large'
-        self.chars = chars
+        self.mode = '' if mode == 'word' else '_' + mode
+        self.lang = lang
+        self.threshold = threshold
         self.dataset = subset
         self.dataset_path = os.path.join(datasets.data_root_directory,
                                          self.dataset)
@@ -29,21 +32,27 @@ class STS(object):
         self.validation_path = os.path.join(self.dataset_path, 'validation',
                                             'validation.txt')
         self.test_path = os.path.join(self.dataset_path, 'test', 'test.txt')
-        self.vocab_path = os.path.join(self.dataset_path, 'vocab{}.txt'.format(suffix))
+        self.vocab_path = os.path.join(self.dataset_path, 'vocab{}.txt'.format(self.mode))
         self.metadata_path = os.path.abspath(os.path.join(self.dataset_path,
-                                               'metadata{}.txt'.format(suffix)))
-        self.w2v_path = os.path.join(self.dataset_path, 'w2v{}.npy'.format(suffix))
+                                               'metadata{}.txt'.format(self.mode)))
+        self.w2v_path = os.path.join(self.dataset_path, 'w2v{}.npy'.format(self.mode))
 
         self.w2i, self.i2w = datasets.load_vocabulary(self.vocab_path)
-        if os.path.exists(self.w2v_path):
-            self.w2v = datasets.load_w2v(self.w2v_path)
+        if load_w2v:
+            if os.path.exists(self.w2v_path):
+                self.w2v = datasets.load_w2v(self.w2v_path)
+            else:
+                self.w2v = np.random.rand(len(self.w2i) , 300)
         else:
-            self.w2v = np.random.rand(len(self.w2i) , 300)
+            self.w2v = None
 
         self.vocab_size = len(self.w2i)
-        self.train = DataSet(self.train_path, (self.w2i, self.i2w), chars)
-        self.validation = DataSet(self.validation_path, (self.w2i, self.i2w), chars)
-        self.test = DataSet(self.test_path, (self.w2i, self.i2w), chars)
+        self.train = DataSet(self.train_path, (self.w2i, self.i2w), mode,
+                             lang, threshold)
+        self.validation = DataSet(self.validation_path, (self.w2i, self.i2w),
+                                  mode, lang, threshold)
+        self.test = DataSet(self.test_path, (self.w2i, self.i2w), mode, lang,
+                            threshold)
         self.__refresh(load_w2v=False)
 
     def create_vocabulary(self, min_frequency=5, tokenizer='spacy',
@@ -67,14 +76,16 @@ class STS(object):
 
 
 class DataSet(object):
-    def __init__(self, path, vocab, chars=False):
+    def __init__(self, path, vocab, mode, lang, threshold):
 
         self.path = path
         self._epochs_completed = 0
         self.vocab_w2i = vocab[0]
         self.vocab_i2w = vocab[1]
         self.datafile = None
-        self.chars = chars
+        self.mode = mode
+        self.lang = lang
+        self.threshold = threshold
 
         self.Batch = collections.namedtuple('Batch', ['s1', 's2', 's3', 'sim'])
 
@@ -100,22 +111,22 @@ class DataSet(object):
 
     def next_batch(self, batch_size=64, seq_begin=False, seq_end=False,
                    rescale=(0.0, 1.0), pad=0, raw=False, keep_entities=False,
-                   negative_sampling=False):
+                   negative_sampling=False, tokenizer='spacy', bypass=False):
         if not self.datafile:
             raise Exception('The dataset needs to be open before being used. '
                             'Please call dataset.open() before calling '
                             'dataset.next_batch()')
         if negative_sampling:
             batch = self.negative_sampling(batch_size, seq_begin, seq_end,
-                   rescale, pad, raw, keep_entities)
+                           rescale, pad, raw, keep_entities, tokenizer, bypass)
         else:
             batch = self.standard_sampling(batch_size, seq_begin, seq_end,
-                                           rescale, pad, raw, keep_entities)
+                                   rescale, pad, raw, keep_entities, tokenizer)
         return batch
 
-    def negative_sampling(self, rescale, batch_size, keep_entities, raw, seq_begin, seq_end, pad):
+    def negative_sampling(self, batch_size, seq_begin, seq_end, rescale, pad,
+                          raw, keep_entities, tokenizer, bypass):
         datasets.validate_rescale(rescale)
-
         s1s, s2s, s3s, buff, sims = [], [], [], [], []
 
         while len(s1s) < batch_size:
@@ -125,10 +136,15 @@ class DataSet(object):
                 self.datafile.seek(0)
                 continue
             cols = row.strip().split('\t')
-            s1, s2, sim = cols[0], cols[1], float(cols[2])
-            s1 = s1.split(' ') if not self.chars else list(s1)
-            s2 = s2.split(' ') if not self.chars else list(s2)
-            if sim >= 0.7:
+            try:
+                s1, s2, sim = cols[0], cols[1], float(cols[2])
+            except:
+                continue
+            s1 = datasets.split_sequence(s1, mode=self.mode,
+                                         tokenizer=tokenizer, lang=self.lang)
+            s2 = datasets.split_sequence(s2, mode=self.mode,
+                                         tokenizer=tokenizer, lang=self.lang)
+            if sim >= self.threshold:
                 s1s.append(s1)
                 s2s.append(s2)
                 sims.append(sim)
@@ -138,26 +154,17 @@ class DataSet(object):
 
         random.shuffle(buff)
         s3s = random.sample(buff, batch_size)
-        if not keep_entities and (not self.chars):
-            s1s = self.remove_entities(s1s)
-            s2s = self.remove_entities(s2s)
-            s3s = self.remove_entities(s3s)
+        del buff
 
-        if not raw:
-            s1s = datasets.seq2id(s1s[:batch_size], self.vocab_w2i, seq_begin,
-                                  seq_end)
-            s2s = datasets.seq2id(s2s[:batch_size], self.vocab_w2i, seq_begin,
-                                  seq_end)
-            s3s = datasets.seq2id(s3s[:batch_size], self.vocab_w2i, seq_begin,
-                                  seq_end)
+        if bypass:
+            s1s, s2s, s3s = self.bypass_process(s1s, s2s, s3s, pad)
         else:
-            s1s = datasets.append_seq_markers(s1s[:batch_size], seq_begin, seq_end)
-            s2s = datasets.append_seq_markers(s2s[:batch_size], seq_begin, seq_end)
-            s3s = datasets.append_seq_markers(s3s[:batch_size], seq_begin, seq_end)
-        if pad != 0:
-            s1s = datasets.padseq(s1s, pad, raw)
-            s2s = datasets.padseq(s2s, pad, raw)
-            s3s = datasets.padseq(s3s, pad, raw)
+            s1s = self.post_process_seq(s1s, seq_begin, seq_end, pad,
+                                        keep_entities, raw)
+            s2s = self.post_process_seq(s2s, seq_begin, seq_end, pad,
+                                        keep_entities, raw)
+            s3s = self.post_process_seq(s3s, seq_begin, seq_end, pad,
+                                        keep_entities, raw)
         batch = self.Batch(
             s1=s1s,
             s2=s2s,
@@ -166,7 +173,8 @@ class DataSet(object):
 
         return batch
 
-    def standard_sampling(self, rescale, batch_size, keep_entities, raw, seq_begin, seq_end, pad):
+    def standard_sampling(self, batch_size, seq_begin, seq_end, rescale, pad,
+                          raw, keep_entities, tokenizer):
         if not self.datafile:
             raise Exception('The dataset needs to be open before being used. '
                             'Please call dataset.open() before calling '
@@ -206,9 +214,43 @@ class DataSet(object):
         batch = self.Batch(
             s1=s1s,
             s2=s2s,
+
             sim=datasets.rescale(sims[:batch_size], rescale, (0.0, 1.0)))
 
         return batch
+
+    def bypass_process(self, s1s, s2s, s3s, pad):
+        zipped_list = list(zip(s1s, s2s, s3s))
+        s1_batch, s2_batch, s3_batch = [], [], []
+        for s1, s2, s3 in zipped_list:
+            s1_batch.append(datasets.create_semantic_hashing(s1, self.vocab_w2i,
+                                                             False, pad))
+            s2_batch.append(datasets.create_semantic_hashing(s2, self.vocab_w2i,
+                                                             False, pad))
+            s3_batch.append(datasets.create_semantic_hashing(s3, self.vocab_w2i,
+                                                             False, pad))
+        return s1_batch, s2_batch, s3_batch
+
+    def post_process_seq(self, seq, seq_begin, seq_end, pad, keep_entities,
+                          raw):
+        if self.mode == 'word' or self.mode == 'char' or self.mode == 'semhash':
+            if not keep_entities and self.mode != 'char':
+                seq = self.remove_entities(seq)
+
+            seq = datasets.append_seq_markers(seq, seq_begin, seq_end)
+
+            if not raw:
+                seq = datasets.seq2id(seq, self.vocab_w2i, seq_begin,
+                                          seq_end)
+            seq = datasets.padseq(seq, pad, raw)
+        #elif self.mode == 'semhash':
+        #    seq = datasets.create_semantic_hashing_batch(seq,
+            # self.vocab_w2i, raw)
+            #if not raw:
+            #    seq = datasets.vectorize_semantic_hash(seq, self.vocab_w2i)
+        #    seq = datasets.pad_semhash(seq, len(self.vocab_w2i), pad, raw)
+
+        return seq
 
     def set_vocab(self, vocab):
         self.vocab_w2i = vocab[0]
@@ -217,3 +259,55 @@ class DataSet(object):
     @property
     def epochs_completed(self):
         return self._epochs_completed
+
+if __name__ == '__main__':
+    import time
+    sts = STS(mode='semhash', load_w2v=False, lang='de', threshold=0.5,
+              subset='GermanSTS')
+    sts.train.open()
+    sts.validation.open()
+    sts.test.open()
+    max_epochs = 1
+
+    train_dir = os.path.join('data', 'sem_hash_dumps', 'train')
+    validation_dir = os.path.join('data', 'sem_hash_dumps', 'validation')
+    test_dir = os.path.join('data', 'sem_hash_dumps', 'test')
+
+    batch_index = 0
+    while max_epochs != sts.train.epochs_completed:
+        print('Train Batch {}'.format(batch_index))
+        batch_path = os.path.join(train_dir, "{}.pkl".format(batch_index))
+        now = time.time()
+        batch = sts.train.next_batch(negative_sampling=True, batch_size=64,
+                               tokenizer='nltk', raw=False, pad=100,
+                                     bypass=False)
+        later = time.time()
+        print('Sampling Duration: {}'.format(int(later - now)))
+
+        #now = time.time()
+        #pickle.dump((batch.s1, batch.s2, batch.s3, batch.sim),
+        #            open(batch_path, "wb"))
+        #later = time.time()
+        #print('Saving Duration: {}'.format(int(later - now)))
+        batch_index += 1
+
+    batch_index = 0
+    while max_epochs != sts.test.epochs_completed:
+        print('Test Batch {}'.format(batch_index))
+        batch_path = os.path.join(test_dir, "{}.pkl".format(batch_index))
+        batch = sts.test.next_batch(negative_sampling=True, batch_size=5,
+                               tokenizer='nltk', raw=False, pad=50)
+        pickle.dump((batch.s1, batch.s2, batch.s3, batch.sim),
+                    open(batch_path, "wb"))
+        batch_index += 1
+
+    batch_index = 0
+    while max_epochs != sts.validation.epochs_completed:
+        print('Validation Batch {}'.format(batch_index))
+        batch_path = os.path.join(validation_dir, "{}.pkl".format(batch_index))
+        batch = sts.validation.next_batch(negative_sampling=True, batch_size=64,
+                                   tokenizer='nltk', raw=False, pad=50,
+                                   bypass=False)
+        #pickle.dump((batch.s1, batch.s2, batch.s3, batch.sim),
+        #            open(batch_path, "wb"))
+        batch_index += 1

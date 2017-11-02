@@ -4,6 +4,7 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import re
+import nltk
 import spacy
 import tflearn
 import collections
@@ -51,8 +52,32 @@ def get_spacy(lang='en'):
 
     return spacy_nlp if lang == 'en' else spacy_nlp_de
 
-spacy_tokenizer = get_spacy(lang='en').tokenizer
-spacy_tokenizer_de = get_spacy(lang='de').tokenizer
+#spacy_tokenizer = get_spacy(lang='en').tokenizer
+#spacy_tokenizer_de = get_spacy(lang='de').tokenizer
+
+
+def iso_langcode_to_nltk_langcode(iso_langcode):
+    if iso_langcode == 'en':
+        return 'english'
+    elif iso_langcode == 'de':
+        return 'german'
+    elif iso_langcode == 'it':
+        return 'italian'
+    else:
+        raise ValueError('Language {} not supported'.format(iso_langcode))
+
+
+def iso639_1_to_iso639_2(iso_langcode):
+    if iso_langcode == 'en':
+        return 'eng'
+    elif iso_langcode == 'de':
+        return 'gem'
+    elif iso_langcode == 'it':
+        return 'ita'
+    else:
+        raise ValueError('Language {} not supported'.format(iso_langcode))
+
+
 
 
 def pad_sentences(data, pad=0, raw=False):
@@ -79,6 +104,25 @@ def pad_sentences(data, pad=0, raw=False):
     return data
 
 
+def pad_semhash(data, vocab_size, pad=0, raw=False):
+    if pad == 0:
+        return data
+
+    padded_data = []
+    for d in data:
+        diff = pad - len(d)
+        if diff > 0:
+            if raw:
+                pads = [['PAD']] * diff
+            else:
+                pads = [to_categorical([0], vocab_size)[0].tolist()] * diff
+            d = d + pads
+            padded_data.append(d[:pad])
+        else:
+            padded_data.append(d[:pad])
+    return padded_data
+
+
 def padseq(data, pad=0, raw=False):
     if pad == 0:
         return data
@@ -96,6 +140,76 @@ def padseq(data, pad=0, raw=False):
     else:
         return tflearn.data_utils.pad_sequences(data, maxlen=pad,
                 dtype='int32', padding='post', truncating='post', value=0)
+
+
+def find_ngrams(input_list, n):
+    return zip(*[input_list[i:] for i in range(n)])
+
+
+def vectorize_semantic_hash(hashgrams_batch, w2i):
+    vectorized_batch = []
+    for hashgrams in hashgrams_batch:
+        k_hot_vecs = []
+        for gram in hashgrams:
+            k_hot_vecs.append(to_categorical([w2i.get(gram, 3)], len(w2i))[
+                                  0].tolist())
+        vectorized_batch.append([sum(i) for i in zip(*k_hot_vecs)])
+    return vectorized_batch
+
+
+def to_categorical(y, num_classes):
+    """ 1-hot encodes a tensor """
+    return np.eye(num_classes, dtype='uint8')[y]
+
+
+def create_semantic_hashing_batch(seq_batch, w2i, raw=True):
+    semantic_hash_batch = []
+    for seq in seq_batch:
+        raw_hash_tri_grams = [[''.join(gram) for gram in
+                                            list(find_ngrams(list(hashtok), 3))]
+                                  for hashtok in seq]
+        if raw:
+            semantic_hash_batch.append(raw_hash_tri_grams)
+        else:
+            semantic_hash_batch.append(vectorize_semantic_hash(
+                                                    raw_hash_tri_grams, w2i))
+
+    return semantic_hash_batch
+
+
+def create_semantic_hashing(seq, w2i, raw=True, pad=0):
+
+    processed_seq = [[''.join(gram) for gram in
+                            list(find_ngrams(list(hashtok), 3))]
+                              for hashtok in seq]
+    if not raw:
+        processed_seq = vectorize_semantic_hash(processed_seq, w2i)
+
+    diff = pad - len(processed_seq)
+    if diff > 0:
+        if raw:
+            pads = [['PAD']] * diff
+        else:
+            pads = [to_categorical([0], len(w2i))[0].tolist()] * diff
+        processed_seq = processed_seq + pads
+    else:
+        processed_seq = processed_seq[:pad]
+    return processed_seq
+
+
+def split_sequence(seq, mode='word', tokenizer='spacy', lang='en'):
+    if mode == 'word':
+        toks = tokenize(seq, tokenizer, lang)
+    elif mode == 'char':
+        toks = list(seq)
+        toks = [s if s != ' ' else 'SPACE' for s in toks]
+    elif mode == 'semhash':
+        unhashed_toks = '#' + seq.replace(" ", "#") + '#'
+        toks =[''.join(gram) for gram in list(find_ngrams(list(unhashed_toks),
+                                                                3))]
+    else:
+        toks = tokenize(seq, tokenizer, lang)
+    return toks
 
 
 def id2seq(data, i2w):
@@ -211,6 +325,8 @@ def append_seq_markers(data, seq_begin=True, seq_end=True):
     seq_begin -- If True, add the ID corresponding to 'SEQ_BEGIN' to each sequence
     seq_end   -- If True, add the ID corresponding to 'SEQ_END' to each sequence
     """
+    if not seq_begin and not seq_end:
+        return data
     data_ = []
     for d in data:
         if seq_begin:
@@ -307,11 +423,11 @@ def tokenize(line, tokenizer='spacy', lang='en'):
     tokens = []
     if tokenizer == 'spacy':
         if lang == 'en':
-            doc = spacy_tokenizer(line)
+            doc = get_spacy(lang='en').tokenizer(line)
         elif lang == 'de':
-            doc = spacy_tokenizer_de(line)
+            doc = get_spacy(lang='de').tokenizer(line)
         else:
-            doc = spacy_tokenizer(line)
+            doc = get_spacy(lang='en').tokenizer(line)
         for token in doc:
             if token.ent_type_ == '':
                 if lang == 'en':
@@ -323,7 +439,24 @@ def tokenize(line, tokenizer='spacy', lang='en'):
             else:
                 tokens.append(token.text)
     elif tokenizer == 'nltk':
-        tokens = nltk_tokenizer(line)
+        tokens = []
+        unnormalized_tokens = nltk_tokenizer(line,
+                                language=iso_langcode_to_nltk_langcode(lang))
+        if lang == 'de':
+            tokens = unnormalized_tokens
+        else:
+            chunked_sentence = nltk.ne_chunk(nltk.tag.pos_tag(
+                unnormalized_tokens,
+                        lang=iso639_1_to_iso639_2(lang)), binary=True)
+
+            for t in chunked_sentence:
+                if hasattr(t, 'label') and t.label:
+                    if t.label() == 'NE':
+                        tokens += [child[0] for child in t]
+                    else:
+                        tokens.append(t[0].lower())
+                else:
+                    tokens.append(t[0].lower())
     elif tokenizer == 'split':
         tokens = line.split(' ')
     else:
@@ -426,6 +559,7 @@ def new_vocabulary(files, dataset_path, min_frequency, tokenizer,
             mf.write("{}\t{}\n".format(word, count))
 
     return vocab_path, w2v_path, metadata_path
+
 
 def load_classes(classes_path):
     """

@@ -43,7 +43,8 @@ class CNNLSTMMargin(Model):
         # between the two sentences. It expects a Matrix of shape [BATCH_SIZE]
         self.input_sim = tf.placeholder(tf.float32, [None], name="input_sim")
 
-    def build_model(self, metadata_path=None, embedding_weights=None):
+    def build_model(self, metadata_path=None, embedding_weights=None,
+                    vocab_size=None, embedding_size=300):
         """
         This method builds the computation graph by adding layers of
         computations. It takes the metadata_path (of the dataset vocabulary)
@@ -62,7 +63,8 @@ class CNNLSTMMargin(Model):
         # Build the Embedding layer as the first layer of the model
 
         self.embedding_weights, self.config = ops.embedding_layer(
-                                        metadata_path, embedding_weights)
+                                        metadata_path, vocab_size=vocab_size,
+            embedding_shape=self.args["embedding_dim"])
         self.embedded_s1 = tf.nn.embedding_lookup(self.embedding_weights,
                                                   self.input_s1)
         self.embedded_s2 = tf.nn.embedding_lookup(self.embedding_weights,
@@ -106,11 +108,12 @@ class CNNLSTMMargin(Model):
         s2_drop = dropout(self.s2_lstm_out, 0.2)
         s3_drop = dropout(self.s3_lstm_out, 0.2)
 
-        self.good_sim = distances.gesd(s1_drop, s2_drop)
-        self.bad_sim = distances.gesd(s1_drop, s3_drop)
+        self.good_sim = tf.squeeze(distances.gesd(s1_drop, s2_drop))
+        self.bad_sim = tf.squeeze(distances.gesd(s1_drop, s3_drop))
     
         with tf.name_scope("loss"):
-            self.loss = losses.margin_loss(self.good_sim, self.bad_sim)
+            self.loss = losses.margin_loss(self.good_sim, self.bad_sim,
+                                           margin=self.args.get("margin", 0.05))
 
             if self.args["l2_reg_beta"] > 0.0:
                 self.regularizer = ops.get_regularizer(self.args["l2_reg_beta"])
@@ -126,11 +129,10 @@ class CNNLSTMMargin(Model):
         """
         # Summaries for loss and accuracy
         self.loss_summary = tf.summary.scalar("loss", self.loss)
-        self.mse_summary = tf.summary.scalar("mse", self.mse)
+
 
         # Train Summaries
-        self.train_summary_op = tf.summary.merge([self.loss_summary,
-                                                  self.mse_summary])
+        self.train_summary_op = tf.summary.merge([self.loss_summary])
 
         self.train_summary_writer = tf.summary.FileWriter(self.checkpoint_dir,
                                                      sess.graph)
@@ -138,8 +140,7 @@ class CNNLSTMMargin(Model):
                                        self.config)
 
         # Dev summaries
-        self.dev_summary_op = tf.summary.merge([self.loss_summary,
-                                                self.mse_summary])
+        self.dev_summary_op = tf.summary.merge([self.loss_summary])
 
         self.dev_summary_writer = tf.summary.FileWriter(self.dev_summary_dir,
                                                    sess.graph)
@@ -154,6 +155,7 @@ class CNNLSTMMargin(Model):
             feed_dict = {
                 self.input_s1: s1_batch,
                 self.input_s2: s2_batch,
+                self.input_s3: s3_batch,
                 self.input_sim: sim_batch,
             }
 
@@ -184,6 +186,7 @@ class CNNLSTMMargin(Model):
         feed_dict = {
             self.input_s1: s1_batch,
             self.input_s2: s2_batch,
+            self.input_s3: s3_batch,
             self.input_sim: sim_batch
         }
 
